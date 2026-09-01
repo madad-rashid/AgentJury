@@ -110,6 +110,10 @@ class Verdict(BaseModel):
     )
     status: Literal["verified", "needs_revision", "blocked"]
     reviews: list[Review]
+    errors: list[str] = Field(
+        default_factory=list,
+        description="Judges that failed to return a review, with the reason.",
+    )
     created_at: datetime = Field(default_factory=_now)
 
     def render(self) -> str:
