@@ -1,0 +1,26 @@
+name: agentjury
+version: 0.1.0
+manifest_version: 2
+api_version: 1
+description: Peer-review every Hermes response with an independent panel of AI judges (AgentJury).
+author: madad-rashid
+license: MIT
+homepage: https://github.com/madad-rashid/AgentJury
+tags: [review, evaluation, quality]
+provides_hooks:
+  - post_llm_call
+  - post_tool_call
+  - pre_llm_call
+python_dependencies:
+  - "agentjury>=0.3,<1"
+config_schema:
+  panel:        {type: str,  default: "accuracy:openai,critic:anthropic,executive:openai", description: "role:provider pairs"}
+  roles_file:   {type: str,  default: "", description: "JSON file of extra judge roles, e.g. a domain expert"}
+  context_file: {type: str,  default: "", description: "Markdown file of organisational context given to every judge"}
+  quorum:       {type: int,  default: 0,  description: "Minimum voters; 0 = strict majority"}
+  min_chars:    {type: int,  default: 400, description: "Skip reviewing responses shorter than this"}
+  task_type:    {type: str,  default: "", description: "Default task_type recorded on every verdict"}
+  domain:       {type: str,  default: "", description: "Default domain recorded on every verdict"}
+  frontmatter:  {type: bool, default: true, description: "Write verdict into YAML frontmatter of markdown files Hermes wrote this turn"}
+  sidecar:      {type: bool, default: true, description: "Write <file>.agentjury.json next to files Hermes wrote this turn"}
+  feedback:     {type: bool, default: true, description: "Inject findings into the next turn when the verdict was not verified"}

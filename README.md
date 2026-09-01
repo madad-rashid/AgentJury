@@ -70,10 +70,16 @@ Give a jury domain expertise with a JSON file of `{"role_name": "description"}`:
 agentjury review task.md output.md --roles examples/roles.json --panel accuracy:openai,domain_expert:anthropic,executive:openai
 ```
 
+## Integrations
+
+- **Hermes Agent**: `integrations/hermes/` is a Hermes plugin that reviews every
+  substantial response, writes the verdict into the frontmatter of notes Hermes
+  produced, and feeds findings back on the next turn. See its README.
+
 ## Status
 
-Early development. Protocol, judges, aggregator, quorum, and CLI work. Framework
-integrations and reviewer reputation are next.
+Core frozen at v0.3. Collecting real verdicts through the Hermes integration.
+Human adjudication and reviewer reputation follow once there is data to calibrate against.
 
 ## Protocol (schema 0.3)
 
@@ -101,7 +107,7 @@ Hermes, Claude Code, Codex, CrewAI, LangGraph, AutoGen, or your own.
 - [x] Judge interface with OpenAI and Anthropic adapters
 - [x] Aggregator (votes, score, consensus, confidence)
 - [x] CLI: `agentjury review task.md output.md`
-- [ ] First framework integration
+- [x] First framework integration: Hermes plugin (`integrations/hermes/`)
 - [x] Review-event schema with telemetry and adjudication slots
 - [x] Quorum, non-unilateral blocking, prompt-injection defence, custom roles
 - [x] Abstain vote, provider floor, retry/repair/timeouts, CI
