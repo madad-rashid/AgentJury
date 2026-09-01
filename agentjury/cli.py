@@ -1,9 +1,11 @@
 """
 Command-line interface.
 
-    agentjury review TASK OUTPUT [--context FILE] [--panel SPEC] [--task-type T] [--domain D] [--json]
-    agentjury roles
-    agentjury schema
+    agentjury review TASK OUTPUT [--panel SPEC] [--roles FILE] [--quorum N] [--task-type T] [--domain D] [--json]
+    agentjury roles [--roles FILE]
+    agentjury schema [request|verdict]
+
+Exit codes: 0 verified, 1 needs_revision, 2 blocked, 3 insufficient_jury.
 
 TASK and OUTPUT are files (or "-" to read OUTPUT from stdin).
 PANEL is a comma-separated list of role:provider pairs, for example
@@ -22,7 +24,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from .judges import ROLES, anthropic_judge, openai_judge
+from .judges import ROLES, anthropic_judge, load_roles, openai_judge
 from .judges.base import Judge
 from .panel import Panel
 from .protocol import Producer, ReviewRequest, Verdict
@@ -38,7 +40,11 @@ PROVIDERS = {
 SEVERITY_MARK = {"minor": "-", "major": "!", "blocking": "X"}
 
 
-def build_panel(spec: str) -> Panel:
+# Exit codes, so shell scripts and CI can branch without parsing output.
+EXIT = {"verified": 0, "needs_revision": 1, "blocked": 2, "insufficient_jury": 3}
+
+
+def build_panel(spec: str, quorum: int | None = None) -> Panel:
     judges: list[Judge] = []
     for item in spec.split(","):
         item = item.strip()
@@ -53,7 +59,7 @@ def build_panel(spec: str) -> Panel:
         if provider not in PROVIDERS:
             sys.exit(f"Unknown provider {provider!r}. Known providers: {', '.join(PROVIDERS)}")
         judges.append(PROVIDERS[provider](role))
-    return Panel(judges)
+    return Panel(judges, quorum=quorum)
 
 
 def read(path: str) -> str:
@@ -71,7 +77,9 @@ def save(verdict: Verdict) -> Path:
 
 def print_verdict(verdict: Verdict) -> None:
     print(verdict.render())
-    print(f"confidence {verdict.confidence:.0%}")
+    print(f"jury confidence index {verdict.confidence:.0%}  (heuristic, not a probability)")
+    if verdict.status == "insufficient_jury":
+        print(f"Only {verdict.responded} of {verdict.requested} judges responded; quorum is {verdict.quorum}. No verdict.")
     print()
     for r in verdict.reviews:
         arrow = "▲" if r.vote == "approve" else "▼"
@@ -84,6 +92,8 @@ def print_verdict(verdict: Verdict) -> None:
 
 
 def cmd_review(args: argparse.Namespace) -> int:
+    if args.roles:
+        load_roles(args.roles)
     request = ReviewRequest(
         task=read(args.task),
         output=read(args.output),
@@ -97,7 +107,7 @@ def cmd_review(args: argparse.Namespace) -> int:
             model=args.producer_model,
         ),
     )
-    verdict = build_panel(args.panel).review(request)
+    verdict = build_panel(args.panel, quorum=args.quorum).review(request)
 
     if args.json:
         print(verdict.model_dump_json(indent=2))
@@ -109,11 +119,12 @@ def cmd_review(args: argparse.Namespace) -> int:
         if not args.json:
             print(f"\nsaved {path}")
 
-    # Exit code lets scripts and CI branch on the result.
-    return 0 if verdict.status == "verified" else 1
+    return EXIT[verdict.status]
 
 
-def cmd_roles(_: argparse.Namespace) -> int:
+def cmd_roles(args: argparse.Namespace) -> int:
+    if args.roles:
+        load_roles(args.roles)
     for name, desc in ROLES.items():
         print(f"{name:<10} {desc}")
     return 0
@@ -136,6 +147,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--context", help="File with background the judges should know.")
     p.add_argument("--panel", default=os.environ.get("AGENTJURY_PANEL", DEFAULT_PANEL),
                    help=f"role:provider pairs, comma-separated (default: {DEFAULT_PANEL})")
+    p.add_argument("--roles", default=os.environ.get("AGENTJURY_ROLES"),
+                   help="JSON file of extra roles {name: description}, e.g. a domain expert.")
+    p.add_argument("--quorum", type=int, help="Minimum judges that must respond (default: majority).")
     p.add_argument("--task-type", help="Kind of work, e.g. financial_analysis, code_review, summary.")
     p.add_argument("--domain", help="Subject area, e.g. private_credit, python.")
     p.add_argument("--agent", help="Name of the agent that did the work.")
@@ -147,6 +161,7 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=cmd_review)
 
     r = sub.add_parser("roles", help="List available judge roles.")
+    r.add_argument("--roles", default=os.environ.get("AGENTJURY_ROLES"), help="JSON file of extra roles.")
     r.set_defaults(func=cmd_roles)
 
     s = sub.add_parser("schema", help="Print the JSON schema for the protocol objects.")

@@ -1,7 +1,7 @@
-from .base import ROLES, RUBRIC_VERSION, Completion, Judge, JudgeOpinion, parse_opinion
+from .base import ROLES, RUBRIC_VERSION, Completion, Judge, JudgeOpinion, load_roles, parse_opinion, register_roles
 from .fake import FakeJudge
 
-__all__ = ["ROLES", "RUBRIC_VERSION", "Completion", "Judge", "JudgeOpinion", "parse_opinion", "FakeJudge"]
+__all__ = ["ROLES", "RUBRIC_VERSION", "Completion", "Judge", "JudgeOpinion", "load_roles", "parse_opinion", "register_roles", "FakeJudge"]
 
 
 def openai_judge(role: str, model: str | None = None):

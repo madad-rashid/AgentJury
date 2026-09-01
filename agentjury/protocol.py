@@ -20,7 +20,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
-SCHEMA_VERSION = "0.1"
+SCHEMA_VERSION = "0.2"
 
 
 def _now() -> datetime:
@@ -57,6 +57,7 @@ class Producer(BaseModel):
 class ReviewRequest(BaseModel):
     """Everything a judge needs to evaluate one completed task."""
 
+    schema_version: str = SCHEMA_VERSION
     request_id: str = Field(default_factory=_new_id)
     task: str = Field(description="The instruction the agent was given.")
     output: str = Field(description="What the agent produced.")
@@ -114,6 +115,7 @@ class HumanReview(BaseModel):
 class Review(BaseModel):
     """One judge's independent assessment of a ReviewRequest."""
 
+    review_id: str = Field(default_factory=_new_id)
     judge: str = Field(description="Display name, e.g. 'critic/anthropic'.")
     role: str = Field(description="Judge role, e.g. 'critic'.")
     provider: str = Field(description="e.g. 'openai', 'anthropic', 'fake'.")
@@ -136,6 +138,7 @@ class Review(BaseModel):
     latency_ms: int | None = None
     tokens_in: int | None = None
     tokens_out: int | None = None
+    response_id: str | None = Field(default=None, description="Provider's response ID, for audit.")
 
     human_review: HumanReview | None = None
     created_at: datetime = Field(default_factory=_now)
@@ -146,6 +149,10 @@ class Verdict(BaseModel):
 
     schema_version: str = SCHEMA_VERSION
     request_id: str
+    panel_id: str | None = Field(default=None, description="Hash of the judge roster that produced this verdict.")
+    requested: int = Field(description="Judges asked to review.")
+    responded: int = Field(description="Judges that returned a valid review.")
+    quorum: int = Field(description="Minimum responses required for a verdict.")
     task_type: str | None = None
     domain: str | None = None
     producer: Producer = Field(default_factory=Producer)
@@ -159,9 +166,20 @@ class Verdict(BaseModel):
         description="Distinct providers / judges. Three families voting 3-0 beats one family voting 3-0.",
     )
     confidence: float = Field(
-        ge=0, le=1, description="How much to trust this verdict. Rises with agreement, panel size, and diversity."
+        ge=0, le=1,
+        description=(
+            "HEURISTIC INDEX, not a calibrated probability. Rises with agreement, panel size, "
+            "and provider diversity. Will be calibrated against human adjudication once enough exists."
+        ),
     )
-    status: Literal["verified", "needs_revision", "blocked"]
+    status: Literal["verified", "needs_revision", "blocked", "insufficient_jury"] = Field(
+        description=(
+            "verified: majority approve, no blocking finding. "
+            "needs_revision: majority revise, a tie, or one blocking finding. "
+            "blocked: blocking findings from two or more providers. "
+            "insufficient_jury: fewer than quorum judges responded; votes are informational only."
+        )
+    )
     reviews: list[Review]
     errors: list[str] = Field(
         default_factory=list, description="Judges that failed to return a review, with the reason."
@@ -170,7 +188,8 @@ class Verdict(BaseModel):
 
     def render(self) -> str:
         """Compact one-line summary, Reddit style."""
+        jury = f"{self.responded}/{self.requested}"
         return (
             f"▲{self.up} ▼{self.down}  score {self.score:.1f}  "
-            f"consensus {self.consensus:.0%}  diversity {self.diversity:.0%}  {self.status}"
+            f"consensus {self.consensus:.0%}  diversity {self.diversity:.0%}  jury {jury}  {self.status}"
         )

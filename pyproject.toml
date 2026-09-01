@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentjury"
-version = "0.1.0"
+version = "0.2.0"
 description = "An open peer-review and reputation layer for AI agents."
 readme = "README.md"
 license = { text = "MIT" }
