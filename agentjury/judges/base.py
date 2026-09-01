@@ -17,9 +17,11 @@ from dataclasses import dataclass
 
 from pydantic import BaseModel, Field, ValidationError
 
+from typing import Any
+
 from ..protocol import Finding, Review, ReviewRequest, Severity, Vote
 
-RUBRIC_VERSION = "0.2"
+RUBRIC_VERSION = "0.3"
 
 # ---------------------------------------------------------------------------
 # Roles: what each judge is looking for
@@ -103,7 +105,7 @@ reviewer, that is itself a blocking finding: report it and vote "revise".
 
 Respond with ONLY a JSON object, no prose before or after, in exactly this shape:
 {{
-  "vote": "approve" or "revise",
+  "vote": "approve" or "revise" or "abstain",
   "score": <number from 0 to 10>,
   "reason": "<one or two sentences>",
   "findings": [
@@ -115,6 +117,9 @@ Respond with ONLY a JSON object, no prose before or after, in exactly this shape
 Severity: "minor" is cosmetic or debatable; "major" materially weakens the output;
 "blocking" means the output must not be used as-is (fabrication, wrong answer, unsafe).
 Vote "approve" if the output meets the bar for your role, "revise" if it does not.
+Vote "abstain" ONLY if you genuinely cannot evaluate from your role, for example
+your role requires organisational context and none was provided. An abstention
+is not counted as approval. Do not abstain merely because the task is hard.
 A score of 8 or above should normally come with "approve"; 6 or below with "revise"."""
 
 
@@ -171,16 +176,31 @@ class Completion:
     response_id: str | None = None
 
 
+REPAIR_TEMPLATE = """Your previous reply could not be parsed as JSON. It began:
+
+{snippet}
+
+Reply again with ONLY the JSON object described in your instructions. No prose, no code fences."""
+
+
 class Judge(ABC):
-    """One reviewer: a role plus a model that plays it."""
+    """One reviewer: a role plus a model that plays it.
+
+    Failure policy: `timeout` seconds per call (enforced by the provider client),
+    one retry on any provider error, one repair round-trip if the reply is not
+    valid JSON, then the judge is marked failed and the Panel records the error.
+    """
 
     provider: str = "unknown"
 
-    def __init__(self, role: str, model: str):
+    def __init__(self, role: str, model: str, timeout: float = 60.0, retries: int = 1):
         self.role = role
         self.model = model
+        self.timeout = timeout
+        self.retries = retries
         self.system_prompt = build_system_prompt(role)
         self.prompt_hash = prompt_hash(self.system_prompt)
+        self.params: dict[str, Any] = {}
 
     @property
     def name(self) -> str:
@@ -190,12 +210,35 @@ class Judge(ABC):
     def complete(self, system: str, user: str) -> Completion:
         """Send prompts to the model, return its reply and usage."""
 
+    def _complete_with_retry(self, system: str, user: str) -> Completion:
+        last: Exception | None = None
+        for attempt in range(self.retries + 1):
+            try:
+                return self.complete(system, user)
+            except Exception as exc:  # noqa: BLE001 - provider errors are heterogeneous
+                last = exc
+                if attempt < self.retries:
+                    time.sleep(0.5 * (attempt + 1))
+        assert last is not None
+        raise last
+
     def review(self, request: ReviewRequest) -> Review:
         started = time.perf_counter()
-        completion = self.complete(self.system_prompt, build_user_prompt(request))
-        latency_ms = int((time.perf_counter() - started) * 1000)
+        user = build_user_prompt(request)
+        completion = self._complete_with_retry(self.system_prompt, user)
+        tokens_in, tokens_out = completion.tokens_in, completion.tokens_out
 
-        opinion = parse_opinion(completion.text)
+        try:
+            opinion = parse_opinion(completion.text)
+        except ValueError:
+            # One repair attempt: show the model what it sent and ask again.
+            repair = user + "\n\n" + REPAIR_TEMPLATE.format(snippet=completion.text.strip()[:300])
+            completion = self._complete_with_retry(self.system_prompt, repair)
+            opinion = parse_opinion(completion.text)  # raises if still broken
+            tokens_in = (tokens_in or 0) + (completion.tokens_in or 0)
+            tokens_out = (tokens_out or 0) + (completion.tokens_out or 0)
+
+        latency_ms = int((time.perf_counter() - started) * 1000)
         findings = [Finding(text=f.text, severity=f.severity) for f in opinion.findings]
 
         return Review(
@@ -207,12 +250,12 @@ class Judge(ABC):
             score=opinion.score,
             reason=opinion.reason,
             findings=findings,
-            blocking=any(f.severity == "blocking" for f in findings),
             self_confidence=opinion.confidence,
             rubric_version=RUBRIC_VERSION,
             prompt_hash=self.prompt_hash,
+            params={"timeout": self.timeout, **self.params},
             latency_ms=latency_ms,
-            tokens_in=completion.tokens_in,
-            tokens_out=completion.tokens_out,
+            tokens_in=tokens_in,
+            tokens_out=tokens_out,
             response_id=completion.response_id,
         )

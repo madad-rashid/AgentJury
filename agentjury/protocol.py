@@ -1,5 +1,5 @@
 """
-The AgentJury protocol, schema version 0.1.
+The AgentJury protocol. Schema version is SCHEMA_VERSION below.
 
     ReviewRequest  ->  [Judge, Judge, Judge]  ->  [Review, Review, Review]  ->  Verdict
 
@@ -18,9 +18,11 @@ from enum import Enum
 from typing import Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from typing import Any
 
-SCHEMA_VERSION = "0.2"
+from pydantic import BaseModel, Field, model_validator
+
+SCHEMA_VERSION = "0.3"
 
 
 def _now() -> datetime:
@@ -85,6 +87,7 @@ class ReviewRequest(BaseModel):
 class Vote(str, Enum):
     APPROVE = "approve"  # rendered as ▲
     REVISE = "revise"  # rendered as ▼
+    ABSTAIN = "abstain"  # judge could not evaluate (e.g. no context to check against); not counted
 
 
 Severity = Literal["minor", "major", "blocking"]
@@ -116,6 +119,8 @@ class Review(BaseModel):
     """One judge's independent assessment of a ReviewRequest."""
 
     review_id: str = Field(default_factory=_new_id)
+    request_id: str | None = Field(default=None, description="The ReviewRequest this review is of.")
+    panel_id: str | None = Field(default=None, description="The panel this review was part of.")
     judge: str = Field(description="Display name, e.g. 'critic/anthropic'.")
     role: str = Field(description="Judge role, e.g. 'critic'.")
     provider: str = Field(description="e.g. 'openai', 'anthropic', 'fake'.")
@@ -126,7 +131,8 @@ class Review(BaseModel):
     reason: str = Field(description="One or two sentences justifying the vote.")
     findings: list[Finding] = Field(default_factory=list)
     blocking: bool = Field(
-        default=False, description="True if any finding has severity 'blocking'."
+        default=False,
+        description="Derived: True iff any finding has severity 'blocking'. Any supplied value is overwritten.",
     )
     self_confidence: float | None = Field(
         default=None, ge=0, le=1,
@@ -135,6 +141,10 @@ class Review(BaseModel):
 
     rubric_version: str = Field(description="Version of the role definitions used.")
     prompt_hash: str = Field(description="Hash of the exact system prompt sent to the judge.")
+    params: dict[str, Any] = Field(
+        default_factory=dict,
+        description="Model parameters that affect behaviour: effort, thinking, max_tokens, temperature...",
+    )
     latency_ms: int | None = None
     tokens_in: int | None = None
     tokens_out: int | None = None
@@ -142,6 +152,11 @@ class Review(BaseModel):
 
     human_review: HumanReview | None = None
     created_at: datetime = Field(default_factory=_now)
+
+    @model_validator(mode="after")
+    def _derive_blocking(self) -> "Review":
+        self.blocking = any(f.severity == "blocking" for f in self.findings)
+        return self
 
 
 class Verdict(BaseModel):
@@ -152,7 +167,8 @@ class Verdict(BaseModel):
     panel_id: str | None = Field(default=None, description="Hash of the judge roster that produced this verdict.")
     requested: int = Field(description="Judges asked to review.")
     responded: int = Field(description="Judges that returned a valid review.")
-    quorum: int = Field(description="Minimum responses required for a verdict.")
+    abstained: int = Field(default=0, description="Responding judges that voted abstain; excluded from votes.")
+    quorum: int = Field(description="Minimum non-abstaining responses required for a verdict.")
     task_type: str | None = None
     domain: str | None = None
     producer: Producer = Field(default_factory=Producer)
@@ -177,7 +193,8 @@ class Verdict(BaseModel):
             "verified: majority approve, no blocking finding. "
             "needs_revision: majority revise, a tie, or one blocking finding. "
             "blocked: blocking findings from two or more providers. "
-            "insufficient_jury: fewer than quorum judges responded; votes are informational only."
+            "insufficient_jury: fewer than quorum judges voted, or a multi-provider panel heard from "
+            "only one provider; votes are informational only."
         )
     )
     reviews: list[Review]
@@ -188,7 +205,9 @@ class Verdict(BaseModel):
 
     def render(self) -> str:
         """Compact one-line summary, Reddit style."""
-        jury = f"{self.responded}/{self.requested}"
+        jury = f"{self.responded - self.abstained}/{self.requested}"
+        if self.abstained:
+            jury += f" ({self.abstained} abstained)"
         return (
             f"▲{self.up} ▼{self.down}  score {self.score:.1f}  "
             f"consensus {self.consensus:.0%}  diversity {self.diversity:.0%}  jury {jury}  {self.status}"

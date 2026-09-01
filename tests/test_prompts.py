@@ -46,3 +46,8 @@ def test_load_roles_from_file(tmp_path):
 def test_unknown_role_still_rejected():
     with pytest.raises(ValueError):
         FakeJudge("no_such_role")
+
+
+def test_system_prompt_explains_abstain():
+    p = build_system_prompt("accuracy")
+    assert '"abstain"' in p and "not counted as approval" in p

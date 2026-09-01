@@ -24,8 +24,8 @@ class AnthropicJudge(Judge):
     provider = "anthropic"
 
     def __init__(self, role: str, model: str = "claude-sonnet-5", max_tokens: int = 4096,
-                 effort: str | None = None, thinking: str | None = None):
-        super().__init__(role, model)
+                 effort: str | None = None, thinking: str | None = None, timeout: float = 90.0):
+        super().__init__(role, model, timeout=timeout)
         try:
             from anthropic import Anthropic
         except ImportError as exc:  # optional dependency
@@ -38,10 +38,12 @@ class AnthropicJudge(Judge):
         if workspace_id:
             headers["anthropic-workspace-id"] = workspace_id
 
-        self._client = Anthropic(default_headers=headers)
+        # max_retries=0: AgentJury owns the retry policy, not the SDK.
+        self._client = Anthropic(default_headers=headers, timeout=timeout, max_retries=0)
         self.max_tokens = max_tokens
         self.effort = effort or os.environ.get("ANTHROPIC_EFFORT", "medium")
         self.thinking = thinking or os.environ.get("ANTHROPIC_THINKING", "adaptive")
+        self.params = {"max_tokens": max_tokens, "effort": self.effort, "thinking": self.thinking}
 
     def complete(self, system: str, user: str) -> Completion:
         kwargs = dict(

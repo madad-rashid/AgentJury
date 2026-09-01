@@ -31,3 +31,8 @@ def test_rejects_bad_severity():
 def test_rejects_no_json():
     with pytest.raises(ValueError):
         parse_opinion("I think it is fine.")
+
+
+def test_abstain_is_a_valid_vote():
+    o = parse_opinion('{"vote": "abstain", "score": 5, "reason": "no context provided"}')
+    assert o.vote == "abstain"

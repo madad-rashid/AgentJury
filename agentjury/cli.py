@@ -79,10 +79,13 @@ def print_verdict(verdict: Verdict) -> None:
     print(verdict.render())
     print(f"jury confidence index {verdict.confidence:.0%}  (heuristic, not a probability)")
     if verdict.status == "insufficient_jury":
-        print(f"Only {verdict.responded} of {verdict.requested} judges responded; quorum is {verdict.quorum}. No verdict.")
+        voters = verdict.responded - verdict.abstained
+        providers = len({r.provider for r in verdict.reviews if r.vote != "abstain"})
+        print(f"Insufficient jury: {voters} of {verdict.requested} judges voted (quorum {verdict.quorum}), "
+              f"from {providers} provider(s). No verdict.")
     print()
     for r in verdict.reviews:
-        arrow = "▲" if r.vote == "approve" else "▼"
+        arrow = {"approve": "▲", "revise": "▼", "abstain": "–"}[r.vote]
         meta = f"{r.latency_ms / 1000:.1f}s" if r.latency_ms is not None else ""
         print(f"{arrow} {r.score:>2.0f}  {r.judge:<22} {r.reason}  [{meta}]")
         for f in r.findings:

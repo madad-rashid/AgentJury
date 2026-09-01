@@ -3,8 +3,8 @@ A Panel is a set of judges that review the same request independently.
 
 Judges run concurrently. Each one sees only the ReviewRequest. A judge that
 crashes (network error, malformed JSON) is recorded in `Verdict.errors`. If
-fewer than `quorum` judges respond, the verdict status is `insufficient_jury`
-and the votes are informational only.
+fewer than `quorum` judges vote, or a multi-provider panel only hears from one
+provider, the verdict status is `insufficient_jury` and votes are informational.
 """
 
 from __future__ import annotations
@@ -49,7 +49,12 @@ class Panel:
         order = {j.name: i for i, j in enumerate(self.judges)}
         reviews.sort(key=lambda r: order.get(r.judge, 999))
 
+        for r in reviews:
+            r.request_id = request.request_id
+            r.panel_id = self.panel_id
+
         return aggregate(
             request, reviews, errors,
             requested=len(self.judges), quorum=self.quorum, panel_id=self.panel_id,
+            requested_providers=len({j.provider for j in self.judges}),
         )
