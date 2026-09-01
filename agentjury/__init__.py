@@ -3,17 +3,20 @@
 from .aggregate import aggregate
 from .panel import Panel
 from .protocol import (
-    Agent,
+    SCHEMA_VERSION,
     Artifact,
+    Finding,
+    HumanReview,
+    Producer,
     Review,
     ReviewRequest,
     Verdict,
     Vote,
 )
 
-__version__ = "0.0.1"
+__version__ = "0.1.0"
 
 __all__ = [
-    "Agent", "Artifact", "Review", "ReviewRequest", "Verdict", "Vote",
-    "Panel", "aggregate",
+    "SCHEMA_VERSION", "Artifact", "Finding", "HumanReview", "Producer",
+    "Review", "ReviewRequest", "Verdict", "Vote", "Panel", "aggregate",
 ]

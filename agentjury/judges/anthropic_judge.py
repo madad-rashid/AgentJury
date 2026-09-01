@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import os
 
-from .base import Judge
+from .base import Completion, Judge
 
 
 class AnthropicJudge(Judge):
@@ -28,11 +28,16 @@ class AnthropicJudge(Judge):
 
         self._client = Anthropic(default_headers=headers)
 
-    def complete(self, system: str, user: str) -> str:
+    def complete(self, system: str, user: str) -> Completion:
         response = self._client.messages.create(
             model=self.model,
             max_tokens=1024,
             system=system,
             messages=[{"role": "user", "content": user}],
         )
-        return "".join(block.text for block in response.content if block.type == "text")
+        usage = response.usage
+        return Completion(
+            text="".join(block.text for block in response.content if block.type == "text"),
+            tokens_in=getattr(usage, "input_tokens", None),
+            tokens_out=getattr(usage, "output_tokens", None),
+        )

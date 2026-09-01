@@ -23,7 +23,7 @@ agentjury review task.md output.md
 ```
 
 ```
-▲2 ▼1  score 7.0  consensus 67%  verified
+▲2 ▼1  score 7.0  consensus 67%  diversity 67%  verified
 confidence 35%
 
 ▲  8  accuracy/openai        Sourced figure, drivers accurately characterized.
@@ -39,13 +39,20 @@ Run `agentjury roles` to see what each role looks for. Every verdict is saved to
 Early development. Protocol, judges, aggregator, and CLI work. Framework
 integrations and reviewer reputation are next.
 
-## Protocol
+## Protocol (schema 0.1)
 
-Three objects:
+Three objects, printable with `agentjury schema request` / `agentjury schema verdict`:
 
-- `ReviewRequest` — the task, the agent's output, optional context and artifacts
-- `Review` — one judge's independent vote, score, reason, and issues
-- `Verdict` — the aggregate: votes, score, consensus, confidence, status
+- `ReviewRequest` — the task, the agent's output, optional context and artifacts, plus
+  `task_type`, `domain`, and the `producer` (agent, framework, provider, model)
+- `Review` — one judge's independent vote, score, reason, and a list of `findings`
+  each with a severity. Also records the judge's role, provider, model, prompt hash,
+  rubric version, latency, and token usage, and leaves a `human_review` slot and a
+  per-finding `adjudication` slot for later human grading
+- `Verdict` — the aggregate: votes, score, consensus, diversity, confidence, status
+
+Every field reputation will need is recorded from the first review. Reputation
+weighting itself is not active yet.
 
 Any agent framework that can build a `ReviewRequest` can use AgentJury:
 Hermes, Claude Code, Codex, CrewAI, LangGraph, AutoGen, or your own.
@@ -57,7 +64,10 @@ Hermes, Claude Code, Codex, CrewAI, LangGraph, AutoGen, or your own.
 - [x] Aggregator (votes, score, consensus, confidence)
 - [x] CLI: `agentjury review task.md output.md`
 - [ ] First framework integration
-- [ ] Reviewer reputation, weighted by human agreement over time
+- [x] Review-event schema frozen with telemetry and adjudication slots
+- [ ] Human adjudication command
+- [ ] Reviewer reputation by task type, weighted by human agreement over time
+- [ ] Jury diversity weighting from historical disagreement
 
 ## License
 

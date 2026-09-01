@@ -2,20 +2,24 @@
 Judge interface.
 
 A Judge takes a ReviewRequest and returns a Review. It sees nothing else:
-not other judges' votes, not previous verdicts. That independence is the
-point. Concrete judges (OpenAI, Anthropic, ...) only have to implement
-one method: `complete(system, user) -> str`.
+not other judges' votes, not previous verdicts. Concrete judges only have
+to implement `complete(system, user) -> Completion`.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
+import time
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 
 from pydantic import BaseModel, Field, ValidationError
 
-from ..protocol import Review, ReviewRequest, Vote
+from ..protocol import Finding, Review, ReviewRequest, Severity, Vote
+
+RUBRIC_VERSION = "0.1"
 
 # ---------------------------------------------------------------------------
 # Roles: what each judge is looking for
@@ -44,14 +48,19 @@ ROLES: dict[str, str] = {
 }
 
 
+class OpinionFinding(BaseModel):
+    text: str
+    severity: Severity = "minor"
+
+
 class JudgeOpinion(BaseModel):
     """The JSON shape we ask the model to return."""
 
     vote: Vote
     score: float = Field(ge=0, le=10)
     reason: str
-    issues: list[str] = Field(default_factory=list)
-    blocking: bool = False
+    findings: list[OpinionFinding] = Field(default_factory=list)
+    confidence: float | None = Field(default=None, ge=0, le=1)
 
 
 SYSTEM_TEMPLATE = """You are an independent reviewer on a panel evaluating work done by an AI agent.
@@ -61,18 +70,24 @@ Your role: {role_name}
 
 You will be given the task the agent was asked to do and the output it produced.
 Judge the output against the task. You have not seen and will not see any other
-reviewer's opinion. Be specific and brief.
+reviewer's opinion. Be specific and brief. Verify a claim before you make it:
+if you are unsure whether something is a problem, say so in the finding rather
+than asserting it.
 
 Respond with ONLY a JSON object, no prose before or after, in exactly this shape:
 {{
   "vote": "approve" or "revise",
   "score": <number from 0 to 10>,
   "reason": "<one or two sentences>",
-  "issues": ["<specific problem>", ...],
-  "blocking": <true if any issue makes the output unusable as-is, else false>
+  "findings": [
+    {{"text": "<one specific problem>", "severity": "minor" | "major" | "blocking"}}
+  ],
+  "confidence": <number from 0 to 1: how sure you are of this assessment>
 }}
 
-Vote "approve" if the output meets the bar for your role. Vote "revise" if it does not.
+Severity: "minor" is cosmetic or debatable; "major" materially weakens the output;
+"blocking" means the output must not be used as-is (fabrication, wrong answer, unsafe).
+Vote "approve" if the output meets the bar for your role, "revise" if it does not.
 A score of 8 or above should normally come with "approve"; 6 or below with "revise"."""
 
 
@@ -89,6 +104,10 @@ def build_user_prompt(request: ReviewRequest) -> str:
     for art in request.artifacts:
         parts.append(f"## Artifact: {art.name}\n{art.content}")
     return "\n\n".join(parts)
+
+
+def prompt_hash(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
 
 
 def parse_opinion(raw: str) -> JudgeOpinion:
@@ -109,6 +128,15 @@ def parse_opinion(raw: str) -> JudgeOpinion:
 # ---------------------------------------------------------------------------
 
 
+@dataclass
+class Completion:
+    """What a provider returns: the text plus token usage if known."""
+
+    text: str
+    tokens_in: int | None = None
+    tokens_out: int | None = None
+
+
 class Judge(ABC):
     """One reviewer: a role plus a model that plays it."""
 
@@ -118,24 +146,38 @@ class Judge(ABC):
         self.role = role
         self.model = model
         self.system_prompt = build_system_prompt(role)
+        self.prompt_hash = prompt_hash(self.system_prompt)
 
     @property
     def name(self) -> str:
         return f"{self.role}/{self.provider}"
 
     @abstractmethod
-    def complete(self, system: str, user: str) -> str:
-        """Send prompts to the model, return its raw text reply."""
+    def complete(self, system: str, user: str) -> Completion:
+        """Send prompts to the model, return its reply and usage."""
 
     def review(self, request: ReviewRequest) -> Review:
-        raw = self.complete(self.system_prompt, build_user_prompt(request))
-        opinion = parse_opinion(raw)
+        started = time.perf_counter()
+        completion = self.complete(self.system_prompt, build_user_prompt(request))
+        latency_ms = int((time.perf_counter() - started) * 1000)
+
+        opinion = parse_opinion(completion.text)
+        findings = [Finding(text=f.text, severity=f.severity) for f in opinion.findings]
+
         return Review(
             judge=self.name,
+            role=self.role,
+            provider=self.provider,
             model=self.model,
             vote=opinion.vote,
             score=opinion.score,
             reason=opinion.reason,
-            issues=opinion.issues,
-            blocking=opinion.blocking,
+            findings=findings,
+            blocking=any(f.severity == "blocking" for f in findings),
+            self_confidence=opinion.confidence,
+            rubric_version=RUBRIC_VERSION,
+            prompt_hash=self.prompt_hash,
+            latency_ms=latency_ms,
+            tokens_in=completion.tokens_in,
+            tokens_out=completion.tokens_out,
         )

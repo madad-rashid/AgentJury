@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .base import Judge
+from .base import Completion, Judge
 
 
 class OpenAIJudge(Judge):
@@ -14,7 +14,7 @@ class OpenAIJudge(Judge):
 
         self._client = OpenAI()
 
-    def complete(self, system: str, user: str) -> str:
+    def complete(self, system: str, user: str) -> Completion:
         response = self._client.chat.completions.create(
             model=self.model,
             messages=[
@@ -22,4 +22,9 @@ class OpenAIJudge(Judge):
                 {"role": "user", "content": user},
             ],
         )
-        return response.choices[0].message.content or ""
+        usage = response.usage
+        return Completion(
+            text=response.choices[0].message.content or "",
+            tokens_in=getattr(usage, "prompt_tokens", None),
+            tokens_out=getattr(usage, "completion_tokens", None),
+        )

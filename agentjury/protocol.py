@@ -1,13 +1,12 @@
 """
-The AgentJury protocol.
-
-Three objects flow through the system:
+The AgentJury protocol, schema version 0.1.
 
     ReviewRequest  ->  [Judge, Judge, Judge]  ->  [Review, Review, Review]  ->  Verdict
 
-A ReviewRequest describes a task an agent completed. Each Judge sees only the
-request (never the other judges' opinions) and returns a Review. The
-Aggregator turns the Reviews into a single Verdict.
+Every field that reputation will later need is captured from the first review:
+who produced the output, who judged it, with which prompt, at what cost, and
+a slot for a human to adjudicate each finding. Reputation weighting is not
+active yet; the data for it is.
 
 Any agent framework that can produce a ReviewRequest can use AgentJury.
 """
@@ -20,6 +19,8 @@ from typing import Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
+
+SCHEMA_VERSION = "0.1"
 
 
 def _now() -> datetime:
@@ -43,12 +44,14 @@ class Artifact(BaseModel):
     media_type: str = "text/plain"
 
 
-class Agent(BaseModel):
-    """Who did the work. All fields optional so any framework can fill it in."""
+class Producer(BaseModel):
+    """Who did the work. Recording the model lets us later measure whether
+    judges favour outputs from their own model family."""
 
-    name: str | None = None
-    framework: str | None = None  # e.g. "hermes", "claude-code", "crewai"
-    model: str | None = None  # e.g. "gpt-5.6-sol", "claude-fable-5-1"
+    agent: str | None = Field(default=None, description="Agent name, e.g. 'hermes-finance'.")
+    framework: str | None = Field(default=None, description="e.g. 'hermes', 'claude-code', 'crewai'.")
+    provider: str | None = Field(default=None, description="e.g. 'openai', 'anthropic'.")
+    model: str | None = Field(default=None, description="e.g. 'gpt-5.6', 'claude-fable-5-1'.")
 
 
 class ReviewRequest(BaseModel):
@@ -61,8 +64,15 @@ class ReviewRequest(BaseModel):
         default=None,
         description="Background the judges should know: domain, prior decisions, house style.",
     )
+    task_type: str | None = Field(
+        default=None,
+        description="Kind of work, e.g. 'financial_analysis', 'code_review', 'summary'. Reputation is tracked per task_type.",
+    )
+    domain: str | None = Field(
+        default=None, description="Subject area, e.g. 'private_credit', 'python', 'marketing'."
+    )
     artifacts: list[Artifact] = Field(default_factory=list)
-    agent: Agent = Field(default_factory=Agent)
+    producer: Producer = Field(default_factory=Producer)
     created_at: datetime = Field(default_factory=_now)
 
 
@@ -76,46 +86,91 @@ class Vote(str, Enum):
     REVISE = "revise"  # rendered as ▼
 
 
+Severity = Literal["minor", "major", "blocking"]
+Adjudication = Literal["correct", "partially_correct", "wrong"]
+
+
+class Finding(BaseModel):
+    """One specific problem a judge raised. Adjudicated individually by a human,
+    so a review with five findings and one mistake keeps credit for four."""
+
+    id: str = Field(default_factory=lambda: uuid4().hex[:8])
+    text: str
+    severity: Severity = "minor"
+    adjudication: Adjudication | None = Field(
+        default=None, description="Set by a human later. None means not yet reviewed."
+    )
+    adjudicated_at: datetime | None = None
+
+
+class HumanReview(BaseModel):
+    """A human's overall judgement of one judge's review."""
+
+    verdict: Literal["agree", "partial", "disagree"]
+    note: str | None = None
+    reviewed_at: datetime = Field(default_factory=_now)
+
+
 class Review(BaseModel):
     """One judge's independent assessment of a ReviewRequest."""
 
-    judge: str = Field(description="Judge identifier, e.g. 'accuracy/anthropic'.")
+    judge: str = Field(description="Display name, e.g. 'critic/anthropic'.")
+    role: str = Field(description="Judge role, e.g. 'critic'.")
+    provider: str = Field(description="e.g. 'openai', 'anthropic', 'fake'.")
     model: str = Field(description="Underlying model that produced this review.")
+
     vote: Vote
     score: float = Field(ge=0, le=10)
     reason: str = Field(description="One or two sentences justifying the vote.")
-    issues: list[str] = Field(
-        default_factory=list,
-        description="Specific problems found. Empty list means none.",
-    )
+    findings: list[Finding] = Field(default_factory=list)
     blocking: bool = Field(
-        default=False,
-        description="True if any issue is serious enough to veto verification.",
+        default=False, description="True if any finding has severity 'blocking'."
     )
+    self_confidence: float | None = Field(
+        default=None, ge=0, le=1,
+        description="Judge's own stated confidence. Weak signal; recorded, not trusted.",
+    )
+
+    rubric_version: str = Field(description="Version of the role definitions used.")
+    prompt_hash: str = Field(description="Hash of the exact system prompt sent to the judge.")
+    latency_ms: int | None = None
+    tokens_in: int | None = None
+    tokens_out: int | None = None
+
+    human_review: HumanReview | None = None
     created_at: datetime = Field(default_factory=_now)
 
 
 class Verdict(BaseModel):
     """The aggregate of all Reviews for one ReviewRequest."""
 
+    schema_version: str = SCHEMA_VERSION
     request_id: str
+    task_type: str | None = None
+    domain: str | None = None
+    producer: Producer = Field(default_factory=Producer)
+
     up: int = Field(description="Number of APPROVE votes.")
     down: int = Field(description="Number of REVISE votes.")
     score: float = Field(ge=0, le=10, description="Mean of judge scores.")
-    consensus: float = Field(
-        ge=0, le=1, description="Share of judges who agree with the majority vote."
+    consensus: float = Field(ge=0, le=1, description="Share of judges who agree with the majority vote.")
+    diversity: float = Field(
+        ge=0, le=1,
+        description="Distinct providers / judges. Three families voting 3-0 beats one family voting 3-0.",
     )
     confidence: float = Field(
-        ge=0, le=1, description="How much to trust this verdict. Rises with agreement and judge count."
+        ge=0, le=1, description="How much to trust this verdict. Rises with agreement, panel size, and diversity."
     )
     status: Literal["verified", "needs_revision", "blocked"]
     reviews: list[Review]
     errors: list[str] = Field(
-        default_factory=list,
-        description="Judges that failed to return a review, with the reason.",
+        default_factory=list, description="Judges that failed to return a review, with the reason."
     )
     created_at: datetime = Field(default_factory=_now)
 
     def render(self) -> str:
         """Compact one-line summary, Reddit style."""
-        return f"▲{self.up} ▼{self.down}  score {self.score:.1f}  consensus {self.consensus:.0%}  {self.status}"
+        return (
+            f"▲{self.up} ▼{self.down}  score {self.score:.1f}  "
+            f"consensus {self.consensus:.0%}  diversity {self.diversity:.0%}  {self.status}"
+        )

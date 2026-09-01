@@ -1,7 +1,9 @@
 """
 Command-line interface.
 
-    agentjury review TASK OUTPUT [--context FILE] [--panel SPEC] [--json]
+    agentjury review TASK OUTPUT [--context FILE] [--panel SPEC] [--task-type T] [--domain D] [--json]
+    agentjury roles
+    agentjury schema
 
 TASK and OUTPUT are files (or "-" to read OUTPUT from stdin).
 PANEL is a comma-separated list of role:provider pairs, for example
@@ -13,6 +15,7 @@ reviews accumulate over time.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -22,7 +25,7 @@ from dotenv import load_dotenv
 from .judges import ROLES, anthropic_judge, openai_judge
 from .judges.base import Judge
 from .panel import Panel
-from .protocol import Agent, ReviewRequest, Verdict
+from .protocol import Producer, ReviewRequest, Verdict
 
 DEFAULT_PANEL = "accuracy:openai,critic:anthropic,executive:openai"
 VERDICT_DIR = Path(".agentjury") / "verdicts"
@@ -31,6 +34,8 @@ PROVIDERS = {
     "openai": openai_judge,
     "anthropic": anthropic_judge,
 }
+
+SEVERITY_MARK = {"minor": "-", "major": "!", "blocking": "X"}
 
 
 def build_panel(spec: str) -> Panel:
@@ -70,11 +75,10 @@ def print_verdict(verdict: Verdict) -> None:
     print()
     for r in verdict.reviews:
         arrow = "▲" if r.vote == "approve" else "▼"
-        print(f"{arrow} {r.score:>2.0f}  {r.judge:<22} {r.reason}")
-        for issue in r.issues:
-            print(f"        - {issue}")
-        if r.blocking:
-            print("        BLOCKING")
+        meta = f"{r.latency_ms / 1000:.1f}s" if r.latency_ms is not None else ""
+        print(f"{arrow} {r.score:>2.0f}  {r.judge:<22} {r.reason}  [{meta}]")
+        for f in r.findings:
+            print(f"        {SEVERITY_MARK[f.severity]} {f.text}")
     for e in verdict.errors:
         print(f"!  {e}")
 
@@ -84,7 +88,14 @@ def cmd_review(args: argparse.Namespace) -> int:
         task=read(args.task),
         output=read(args.output),
         context=read(args.context) if args.context else None,
-        agent=Agent(name=args.agent, framework=args.framework),
+        task_type=args.task_type,
+        domain=args.domain,
+        producer=Producer(
+            agent=args.agent,
+            framework=args.framework,
+            provider=args.producer_provider,
+            model=args.producer_model,
+        ),
     )
     verdict = build_panel(args.panel).review(request)
 
@@ -108,6 +119,12 @@ def cmd_roles(_: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_schema(args: argparse.Namespace) -> int:
+    model = {"request": ReviewRequest, "verdict": Verdict}[args.object]
+    print(json.dumps(model.model_json_schema(), indent=2))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     load_dotenv()
     parser = argparse.ArgumentParser(prog="agentjury", description="Peer review for AI agent output.")
@@ -119,14 +136,22 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--context", help="File with background the judges should know.")
     p.add_argument("--panel", default=os.environ.get("AGENTJURY_PANEL", DEFAULT_PANEL),
                    help=f"role:provider pairs, comma-separated (default: {DEFAULT_PANEL})")
+    p.add_argument("--task-type", help="Kind of work, e.g. financial_analysis, code_review, summary.")
+    p.add_argument("--domain", help="Subject area, e.g. private_credit, python.")
     p.add_argument("--agent", help="Name of the agent that did the work.")
     p.add_argument("--framework", help="Framework the agent runs on, e.g. hermes.")
+    p.add_argument("--producer-provider", help="Provider of the model that did the work, e.g. anthropic.")
+    p.add_argument("--producer-model", help="Model that did the work, e.g. claude-fable-5-1.")
     p.add_argument("--json", action="store_true", help="Print the full verdict as JSON.")
     p.add_argument("--no-save", action="store_true", help="Do not write the verdict to .agentjury/.")
     p.set_defaults(func=cmd_review)
 
     r = sub.add_parser("roles", help="List available judge roles.")
     r.set_defaults(func=cmd_roles)
+
+    s = sub.add_parser("schema", help="Print the JSON schema for the protocol objects.")
+    s.add_argument("object", choices=["request", "verdict"], nargs="?", default="verdict")
+    s.set_defaults(func=cmd_schema)
 
     args = parser.parse_args(argv)
     return args.func(args)

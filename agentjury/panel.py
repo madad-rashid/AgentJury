@@ -42,4 +42,4 @@ class Panel:
         order = {j.name: i for i, j in enumerate(self.judges)}
         reviews.sort(key=lambda r: order.get(r.judge, 999))
 
-        return aggregate(request.request_id, reviews, errors)
+        return aggregate(request, reviews, errors)
