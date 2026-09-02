@@ -97,6 +97,7 @@ def test_written_markdown_gets_frontmatter_and_sidecar(plugin, tmp_path):
     text = note.read_text(encoding="utf-8")
     assert text.startswith("---\ntitle: Pilot\ntags: [madad]\nagentjury_status: verified\n")
     assert 'agentjury_votes: "▲2 ▼0"' in text
+    assert "agentjury_request_id:" in text and "agentjury_run_id:" in text and "agentjury_id:" not in text
     assert text.endswith("# Pilot\n\nBody.\n")
     assert (tmp_path / "vault" / "Pilot.md.agentjury.json").is_file()
 
@@ -219,3 +220,22 @@ def test_slow_older_turn_does_not_overwrite_newer_verdict(plugin, tmp_path):
     assert jury.on_turn_start("s1") is None                       # no stale feedback injected
     assert len(list(jury.verdict_dir.glob("*.json"))) == 2       # both preserved
     assert jury.pending == {}
+
+
+def test_pending_never_keeps_finished_futures(plugin, tmp_path):
+    jury, _ = make_jury(plugin, tmp_path, min_chars=10)
+    for i in range(5):
+        jury.on_turn_end(f"s{i}", "t", "a long enough response here")
+    jury.wait(10)
+    assert jury.pending == {}
+
+
+def test_legacy_frontmatter_key_is_replaced(plugin, tmp_path):
+    note = tmp_path / "old.md"
+    note.write_text("---\ntitle: Old\nagentjury_id: deadbeef0000\nagentjury_status: verified\n---\nBody\n", encoding="utf-8")
+    jury, _ = make_jury(plugin, tmp_path, min_chars=10)
+    jury.on_tool_call("write_file", {"path": str(note)}, task_id="s1")
+    jury.on_turn_end("s1", "t", "a long enough response here")
+    jury.wait(10)
+    text = note.read_text(encoding="utf-8")
+    assert "agentjury_id:" not in text and text.count("agentjury_status") == 1 and "title: Old" in text

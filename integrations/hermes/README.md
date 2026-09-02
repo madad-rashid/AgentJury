@@ -11,7 +11,8 @@ agentjury_status: needs_revision
 agentjury_votes: "▲1 ▼2"
 agentjury_score: 6.3
 agentjury_confidence: 0.42
-agentjury_id: 9a9a900dc86b
+agentjury_request_id: 9a9a900dc86b
+agentjury_run_id: 4c1e77a0b2d9
 ---
 ```
 

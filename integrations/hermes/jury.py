@@ -105,7 +105,8 @@ def read_artifact(path: str) -> Artifact | None:
 # ---------------------------------------------------------------------------
 
 _FM = re.compile(r"\A---\r?\n(.*?)\r?\n---\r?\n", re.DOTALL)
-_KEYS = ("agentjury_status", "agentjury_votes", "agentjury_score", "agentjury_confidence", "agentjury_id", "agentjury_at")
+_KEYS = ("agentjury_status", "agentjury_votes", "agentjury_score", "agentjury_confidence",
+         "agentjury_id", "agentjury_request_id", "agentjury_run_id", "agentjury_at")
 
 
 def frontmatter_lines(verdict: Verdict) -> list[str]:
@@ -114,7 +115,8 @@ def frontmatter_lines(verdict: Verdict) -> list[str]:
         f"agentjury_votes: \"▲{verdict.up} ▼{verdict.down}\"",
         f"agentjury_score: {verdict.score}",
         f"agentjury_confidence: {verdict.confidence}",
-        f"agentjury_id: {verdict.request_id}",
+        f"agentjury_request_id: {verdict.request_id}",
+        f"agentjury_run_id: {verdict.run_id}",
         f"agentjury_at: {datetime.now(timezone.utc).isoformat(timespec='seconds')}",
     ]
 
@@ -249,8 +251,12 @@ class Jury:
             artifacts=artifacts,
             producer=Producer(agent="hermes", framework="hermes", provider=infer_provider(model), model=model),
         )
+        key = (session_id, seq)
         fut = self._pool.submit(self._review, session_id, seq, request, paths)
-        self.pending[(session_id, seq)] = fut
+        self.pending[key] = fut
+        # If the review already finished, this runs immediately; otherwise on completion.
+        # Either way the entry is removed exactly once, with no window for a stale one.
+        fut.add_done_callback(lambda _f, k=key: self.pending.pop(k, None))
         return fut
 
     def on_turn_start(self, session_id: str, **_) -> dict | None:
@@ -270,8 +276,6 @@ class Jury:
         except Exception:
             log.exception("agentjury: review failed for session %s turn %d", session_id, seq)
             raise
-        finally:
-            self.pending.pop((session_id, seq), None)
 
     def _review_inner(self, session_id: str, seq: int, request: ReviewRequest, paths: list[str]) -> Verdict:
         if self._panel is None:
