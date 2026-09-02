@@ -206,6 +206,12 @@ class Judge(ABC):
     def name(self) -> str:
         return f"{self.role}/{self.provider}"
 
+    @property
+    def config_id(self) -> str:
+        """Identity for reputation: same model with different effort is a different reviewer."""
+        params = json.dumps({"timeout": self.timeout, **self.params}, sort_keys=True, default=str)
+        return prompt_hash(f"{self.provider}|{self.model}|{self.role}|{self.prompt_hash}|{params}")
+
     @abstractmethod
     def complete(self, system: str, user: str) -> Completion:
         """Send prompts to the model, return its reply and usage."""
@@ -253,6 +259,7 @@ class Judge(ABC):
             self_confidence=opinion.confidence,
             rubric_version=RUBRIC_VERSION,
             prompt_hash=self.prompt_hash,
+            config_id=self.config_id,
             params={"timeout": self.timeout, **self.params},
             latency_ms=latency_ms,
             tokens_in=tokens_in,

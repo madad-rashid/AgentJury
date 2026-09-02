@@ -74,10 +74,16 @@ agentjury adjudicate 9a9a900dc86b --judge critic/anthropic \
 agentjury adjudicate 9a9a900dc86b --producer-verdict correct
 ```
 
-Findings are numbered as displayed. Grades are written back into the verdict JSON:
-`adjudication` on each finding, `human_review` on the review, `human_verdict` on the
-verdict for the producer's output itself. Set `AGENTJURY_VERDICT_DIR` to avoid
-repeating `--dir`.
+Findings are numbered as displayed. Grades are written back into the verdict JSON
+(current state) and appended as events to `adjudications.jsonl` in the same folder
+(history: who changed which finding from what to what, when, and why). Set
+`AGENTJURY_VERDICT_DIR` to avoid repeating `--dir`.
+
+Identity: `request_id` is the work being evaluated, `run_id` is one jury execution of it
+(the same request can be judged by several panels), `review_id` is one judge's opinion,
+`config_id` is the judge's identity for reputation (provider, model, role, prompt hash,
+and parameters such as effort), and each finding has its own `id`. Verdicts are saved as
+`<request_id>-<run_id>.json`.
 
 ## Custom roles
 
@@ -98,7 +104,7 @@ agentjury review task.md output.md --roles examples/roles.json --panel accuracy:
 Core frozen at v0.3. Collecting real verdicts through the Hermes integration.
 Human adjudication and reviewer reputation follow once there is data to calibrate against.
 
-## Protocol (schema 0.4)
+## Protocol (schema 0.5)
 
 Three objects, printable with `agentjury schema request` / `agentjury schema verdict`:
 
@@ -106,8 +112,8 @@ Three objects, printable with `agentjury schema request` / `agentjury schema ver
   `task_type`, `domain`, and the `producer` (agent, framework, provider, model)
 - `Review` — one judge's independent vote, score, reason, and a list of `findings`
   each with a severity. Stands alone as a dataset row: carries `review_id`,
-  `request_id`, `panel_id`, the judge's role, provider, model, prompt hash, rubric
-  version, model `params` (effort, thinking, max_tokens), latency, and token usage,
+  `request_id`, `run_id`, `panel_id`, `config_id`, the judge's role, provider, model,
+  prompt hash, rubric version, model `params` (effort, thinking, max_tokens), latency, and token usage,
   and leaves a `human_review` slot and a per-finding `adjudication` slot for later
   human grading
 - `Verdict` — the aggregate: votes, score, consensus, diversity, confidence, status

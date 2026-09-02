@@ -21,13 +21,18 @@ def saved(tmp_path):
     ]).review(ReviewRequest(task="t", output="o"))
     d = tmp_path / "verdicts"
     d.mkdir()
-    f = d / f"{v.request_id}.json"
+    f = d / v.filename
     f.write_text(v.model_dump_json(indent=2), encoding="utf-8")
     return d, v
 
 
 def reload(d, v):
-    return Verdict.model_validate_json((d / f"{v.request_id}.json").read_text(encoding="utf-8"))
+    return Verdict.model_validate_json((d / v.filename).read_text(encoding="utf-8"))
+
+
+def events(d):
+    f = d / "adjudications.jsonl"
+    return [json.loads(l) for l in f.read_text(encoding="utf-8").splitlines()] if f.is_file() else []
 
 
 def test_adjudicate_findings_and_review(saved, capsys):
@@ -104,3 +109,37 @@ def test_verdicts_lists_and_marks_adjudicated(saved, capsys):
     main(["verdicts", "--dir", str(d)])
     out = capsys.readouterr().out
     assert "[adjudicated 1/3]" in out and "producer:correct" in out
+
+
+def test_adjudicate_by_run_id(saved):
+    d, v = saved
+    main(["adjudicate", v.run_id, "--dir", str(d), "--producer-verdict", "correct"])
+    assert reload(d, v).human_verdict == "correct"
+
+
+def test_adjudication_events_are_appended_not_overwritten(saved, monkeypatch):
+    d, v = saved
+    monkeypatch.setenv("AGENTJURY_ADJUDICATOR", "tester")
+    main(["adjudicate", v.run_id, "--dir", str(d), "--judge", "critic", "--finding", "1", "wrong", "--note", "first look"])
+    main(["adjudicate", v.run_id, "--dir", str(d), "--judge", "critic", "--finding", "1", "correct", "--note", "checked source"])
+    main(["adjudicate", v.run_id, "--dir", str(d), "--producer-verdict", "flawed"])
+    assert reload(d, v).reviews[1].findings[0].adjudication == "correct"  # current state
+    ev = events(d)
+    assert [e["kind"] for e in ev] == ["finding", "finding", "producer"]
+    assert (ev[0]["old"], ev[0]["new"]) == (None, "wrong")
+    assert (ev[1]["old"], ev[1]["new"]) == ("wrong", "correct") and ev[1]["note"] == "checked source"
+    assert all(e["adjudicator"] == "tester" and e["run_id"] == v.run_id for e in ev)
+    assert ev[0]["finding_id"] == v.reviews[1].findings[0].id and ev[0]["config_id"] == v.reviews[1].config_id
+
+
+def test_two_runs_of_one_request_both_saved(tmp_path):
+    d = tmp_path / "v"
+    d.mkdir()
+    req = ReviewRequest(task="t", output="o")
+    for _ in range(2):
+        v = Panel([FakeJudge("accuracy")]).review(req)
+        (d / v.filename).write_text(v.model_dump_json(), encoding="utf-8")
+    assert len(list(d.glob(f"{req.request_id}-*.json"))) == 2
+    with pytest.raises(SystemExit) as e:  # request_id alone is now ambiguous
+        main(["adjudicate", req.request_id, "--dir", str(d), "--producer-verdict", "correct"])
+    assert "2 matches" in str(e.value)

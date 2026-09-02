@@ -144,7 +144,7 @@ def write_sidecar(path: Path, verdict: Verdict) -> Path:
 
 
 def render_verdict(verdict: Verdict, files: list[str] | None = None) -> str:
-    lines = [f"{verdict.render()}   id {verdict.request_id}",
+    lines = [f"{verdict.render()}   run {verdict.run_id}",
              f"jury confidence index {verdict.confidence:.0%}"]
     for r in verdict.reviews:
         arrow = {"approve": "▲", "revise": "▼", "abstain": "–"}[r.vote]
@@ -155,7 +155,7 @@ def render_verdict(verdict: Verdict, files: list[str] | None = None) -> str:
         lines.append(f"!  {e}")
     if files:
         lines.append("files: " + ", ".join(files))
-    lines.append(f"adjudicate: agentjury adjudicate {verdict.request_id} --dir <hermes-home>/plugin-data/agentjury/verdicts ...")
+    lines.append(f"adjudicate: agentjury adjudicate {verdict.run_id} --dir <hermes-home>/plugin-data/agentjury/verdicts ...")
     return "\n".join(lines)
 
 
@@ -192,7 +192,11 @@ class Jury:
         self._pool = ThreadPoolExecutor(max_workers=2, thread_name_prefix="agentjury")
         self._lock = threading.Lock()
         self.files: dict[str, TurnFiles] = {}
-        self.pending: dict[str, Future] = {}
+        # Every turn in a session gets an increasing sequence number. A review may
+        # finish out of order; only the highest-sequence finished review is "latest".
+        self.turn_seq: dict[str, int] = {}
+        self.latest_seq: dict[str, int] = {}
+        self.pending: dict[tuple[str, int], Future] = {}
         self.last: dict[str, Verdict] = {}
         self.last_files: dict[str, list[str]] = {}
         self.unread_feedback: set[str] = set()
@@ -233,6 +237,8 @@ class Jury:
             return None
         with self._lock:
             paths = self.files.pop(session_id, TurnFiles()).paths
+            seq = self.turn_seq.get(session_id, 0) + 1
+            self.turn_seq[session_id] = seq
         artifacts = [a for a in (read_artifact(p) for p in paths[:MAX_ARTIFACTS]) if a]
         request = ReviewRequest(
             task=user_message or "(no user message captured)",
@@ -243,8 +249,8 @@ class Jury:
             artifacts=artifacts,
             producer=Producer(agent="hermes", framework="hermes", provider=infer_provider(model), model=model),
         )
-        fut = self._pool.submit(self._review, session_id, request, paths)
-        self.pending[session_id] = fut
+        fut = self._pool.submit(self._review, session_id, seq, request, paths)
+        self.pending[(session_id, seq)] = fut
         return fut
 
     def on_turn_start(self, session_id: str, **_) -> dict | None:
@@ -258,18 +264,20 @@ class Jury:
 
     # -- work ----------------------------------------------------------------
 
-    def _review(self, session_id: str, request: ReviewRequest, paths: list[str]) -> Verdict:
+    def _review(self, session_id: str, seq: int, request: ReviewRequest, paths: list[str]) -> Verdict:
         try:
-            return self._review_inner(session_id, request, paths)
+            return self._review_inner(session_id, seq, request, paths)
         except Exception:
-            log.exception("agentjury: review failed for session %s", session_id)
+            log.exception("agentjury: review failed for session %s turn %d", session_id, seq)
             raise
+        finally:
+            self.pending.pop((session_id, seq), None)
 
-    def _review_inner(self, session_id: str, request: ReviewRequest, paths: list[str]) -> Verdict:
+    def _review_inner(self, session_id: str, seq: int, request: ReviewRequest, paths: list[str]) -> Verdict:
         if self._panel is None:
             self._panel = self._panel_factory(self.settings)
         verdict = self._panel.review(request)
-        (self.verdict_dir / f"{verdict.request_id}.json").write_text(verdict.model_dump_json(indent=2), encoding="utf-8")
+        (self.verdict_dir / verdict.filename).write_text(verdict.model_dump_json(indent=2), encoding="utf-8")
         for p in paths:
             path = Path(p)
             if not path.is_file():
@@ -281,11 +289,19 @@ class Jury:
                     write_frontmatter(path, verdict)
             except OSError as exc:
                 log.warning("agentjury: could not annotate %s: %s", p, exc)
-        self.last[session_id] = verdict
-        self.last_files[session_id] = paths
-        if verdict.status != "verified":
-            self.unread_feedback.add(session_id)
-        log.info("agentjury: %s  %s", verdict.render(), ", ".join(paths))
+        with self._lock:
+            if seq >= self.latest_seq.get(session_id, 0):
+                self.latest_seq[session_id] = seq
+                self.last[session_id] = verdict
+                self.last_files[session_id] = paths
+                if verdict.status != "verified":
+                    self.unread_feedback.add(session_id)
+                else:
+                    self.unread_feedback.discard(session_id)
+            else:
+                log.info("agentjury: turn %d finished after turn %d; saved but not made latest",
+                         seq, self.latest_seq[session_id])
+        log.info("agentjury: turn %d %s  %s", seq, verdict.render(), ", ".join(paths))
         return verdict
 
     # -- slash command -------------------------------------------------------
@@ -293,13 +309,13 @@ class Jury:
     def status(self, raw_args: str = "") -> str:
         arg = raw_args.strip()
         if arg:
-            f = self.verdict_dir / f"{arg}.json"
-            if f.is_file():
-                return render_verdict(Verdict.model_validate_json(f.read_text(encoding="utf-8")))
-            return f"No verdict {arg!r}. Saved verdicts are in {self.verdict_dir}"
-        running = [s for s, fut in self.pending.items() if not fut.done()]
+            hits = [f for f in self.verdict_dir.glob("*.json") if arg in f.stem]
+            if len(hits) == 1:
+                return render_verdict(Verdict.model_validate_json(hits[0].read_text(encoding="utf-8")))
+            return f"{len(hits)} verdicts match {arg!r}. Saved verdicts are in {self.verdict_dir}"
+        running = [k for k, fut in self.pending.items() if not fut.done()]
         if running and not self.last:
-            return f"AgentJury: review in progress for {len(running)} session(s)..."
+            return f"AgentJury: {len(running)} review(s) in progress..."
         if not self.last:
             return f"AgentJury: no verdicts yet. Panel: {self.settings.panel}"
         session = max(self.last, key=lambda s: self.last[s].created_at)

@@ -75,7 +75,7 @@ def read(path: str) -> str:
 
 def save(verdict: Verdict) -> Path:
     VERDICT_DIR.mkdir(parents=True, exist_ok=True)
-    out = VERDICT_DIR / f"{verdict.request_id}.json"
+    out = VERDICT_DIR / verdict.filename
     out.write_text(verdict.model_dump_json(indent=2), encoding="utf-8")
     return out
 
@@ -139,7 +139,7 @@ def load_verdict(args: argparse.Namespace) -> tuple[Path, Verdict]:
     path = Path(ref)
     if not path.is_file():
         d = verdict_dir(args)
-        candidates = sorted(d.glob(f"{ref}*.json")) if d.is_dir() else []
+        candidates = sorted(f for f in d.glob("*.json") if ref in f.stem) if d.is_dir() else []
         if len(candidates) != 1:
             hint = f"{len(candidates)} matches" if candidates else "no match"
             sys.exit(f"Cannot find verdict {ref!r} in {d} ({hint}). Use `agentjury verdicts --dir {d}` to list.")
@@ -160,8 +160,24 @@ def cmd_verdicts(args: argparse.Namespace) -> int:
         total = sum(len(r.findings) for r in v.reviews)
         mark = f"  [adjudicated {graded}/{total}]" if graded else ""
         prod = f"  producer:{v.human_verdict}" if v.human_verdict else ""
-        print(f"{v.request_id}  {v.created_at:%Y-%m-%d %H:%M}  {v.render()}{mark}{prod}")
+        print(f"run {v.run_id}  req {v.request_id}  {v.created_at:%Y-%m-%d %H:%M}  {v.render()}{mark}{prod}")
     return 0
+
+
+ADJUDICATION_LOG = "adjudications.jsonl"
+
+
+def _adjudicator() -> str:
+    import getpass
+    return os.environ.get("AGENTJURY_ADJUDICATOR") or getpass.getuser()
+
+
+def log_event(directory: Path, event: dict) -> None:
+    """Append-only audit trail. The verdict JSON holds current state; this holds history."""
+    from uuid import uuid4
+    event = {"event_id": uuid4().hex[:12], **event}
+    with (directory / ADJUDICATION_LOG).open("a", encoding="utf-8") as f:
+        f.write(json.dumps(event, default=str) + "\n")
 
 
 def cmd_adjudicate(args: argparse.Namespace) -> int:
@@ -169,6 +185,9 @@ def cmd_adjudicate(args: argparse.Namespace) -> int:
 
     path, v = load_verdict(args)
     now = datetime.now(timezone.utc)
+    who = _adjudicator()
+    base = {"at": now.isoformat(timespec="seconds"), "adjudicator": who,
+            "run_id": v.run_id, "request_id": v.request_id, "note": args.note}
     changed: list[str] = []
 
     if args.finding or args.verdict:
@@ -191,14 +210,22 @@ def cmd_adjudicate(args: argparse.Namespace) -> int:
                 target = next((f for f in review.findings if f.id == ref), None)
             if target is None:
                 sys.exit(f"{review.judge} has no finding {ref!r} (it has {len(review.findings)}).")
+            log_event(path.parent, {**base, "kind": "finding", "review_id": review.review_id,
+                                    "judge": review.judge, "config_id": review.config_id,
+                                    "finding_id": target.id, "old": target.adjudication, "new": label})
             target.adjudication = label
             target.adjudicated_at = now
             changed.append(f"{review.judge} finding {ref}: {label}")
         if args.verdict:
+            old = review.human_review.verdict if review.human_review else None
+            log_event(path.parent, {**base, "kind": "review", "review_id": review.review_id,
+                                    "judge": review.judge, "config_id": review.config_id,
+                                    "old": old, "new": args.verdict})
             review.human_review = HumanReview(verdict=args.verdict, note=args.note, reviewed_at=now)
             changed.append(f"{review.judge} review: {args.verdict}")
 
     if args.producer_verdict:
+        log_event(path.parent, {**base, "kind": "producer", "old": v.human_verdict, "new": args.producer_verdict})
         v.human_verdict = args.producer_verdict
         v.human_note = args.note
         v.adjudicated_at = now
@@ -208,9 +235,10 @@ def cmd_adjudicate(args: argparse.Namespace) -> int:
         sys.exit("Nothing to record. Give --finding, --verdict, or --producer-verdict.")
 
     path.write_text(v.model_dump_json(indent=2), encoding="utf-8")
-    print(f"{v.request_id}  {path}")
+    print(f"run {v.run_id}  {path}")
     for c in changed:
         print(f"  {c}")
+    print(f"  logged by {who} -> {path.parent / ADJUDICATION_LOG}")
     return 0
 
 
@@ -262,7 +290,7 @@ def main(argv: list[str] | None = None) -> int:
     vl.set_defaults(func=cmd_verdicts)
 
     a = sub.add_parser("adjudicate", help="Record a human judgement on a saved verdict.")
-    a.add_argument("request_id", help="Verdict id (or unique prefix), or a path to its JSON file.")
+    a.add_argument("request_id", metavar="ID", help="run_id or request_id (or unique fragment), or a path to the JSON file.")
     a.add_argument("--dir", help="Verdict directory (default: $AGENTJURY_VERDICT_DIR or .agentjury/verdicts).")
     a.add_argument("--judge", help="Which review to grade: judge name (critic/anthropic), role, or review_id.")
     a.add_argument("--finding", nargs=2, action="append", metavar=("N", "LABEL"),

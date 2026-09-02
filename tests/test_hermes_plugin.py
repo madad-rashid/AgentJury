@@ -81,7 +81,7 @@ def test_turn_is_reviewed_and_saved(plugin, tmp_path):
     assert verdict.status == "verified"
     assert verdict.task_type == "research" and verdict.domain == "credit"
     assert verdict.producer.framework == "hermes" and verdict.producer.provider == "anthropic"
-    assert (jury.verdict_dir / f"{verdict.request_id}.json").is_file()
+    assert (jury.verdict_dir / verdict.filename).is_file()
 
 
 def test_written_markdown_gets_frontmatter_and_sidecar(plugin, tmp_path):
@@ -167,7 +167,7 @@ def test_status_command(plugin, tmp_path):
     out = jury.status()
     assert "▲2 ▼0" in out and "accuracy/openai" in out
     assert "▲2 ▼0" in jury.status(v.request_id)
-    assert "No verdict" in jury.status("nope")
+    assert "0 verdicts match" in jury.status("nope")
 
 
 def test_infer_provider(plugin):
@@ -187,3 +187,35 @@ def test_alternative_payload_names_are_accepted(plugin, tmp_path):
 def test_missing_response_is_skipped_not_crashed(plugin, tmp_path):
     jury, _ = make_jury(plugin, tmp_path, min_chars=10)
     assert jury.on_turn_end(session_id="s1", user_message="hi", something_else=42) is None
+
+
+def test_slow_older_turn_does_not_overwrite_newer_verdict(plugin, tmp_path):
+    """Turn 1 is slow and votes revise; turn 2 is fast and approves. Latest must be turn 2."""
+    calls = {"n": 0}
+
+    def factory(settings):
+        return Panel([FakeJudge("accuracy", provider="openai"), FakeJudge("critic", provider="anthropic")])
+
+    jury, _ = make_jury(plugin, tmp_path, min_chars=10, _factory=factory)
+    # swap in per-turn panels: first slow+revise, then fast+approve
+    slow = Panel([FakeJudge("accuracy", provider="openai", vote="revise", score=4, delay=0.6,
+                            findings=[{"text": "Old problem", "severity": "major"}]),
+                  FakeJudge("critic", provider="anthropic", vote="revise", score=4, delay=0.6)])
+    fast = Panel([FakeJudge("accuracy", provider="openai"), FakeJudge("critic", provider="anthropic")])
+    panels = iter([slow, fast])
+    original = jury._panel_factory
+    jury._panel = None
+
+    class Switching:
+        def review(self, request):
+            return next(panels).review(request)
+
+    jury._panel = Switching()
+    f1 = jury.on_turn_end("s1", "first", "a long enough response, turn one")
+    f2 = jury.on_turn_end("s1", "second", "a long enough response, turn two")
+    jury.wait(10)
+    assert f1.result().status == "needs_revision" and f2.result().status == "verified"
+    assert jury.last["s1"].run_id == f2.result().run_id          # newest wins
+    assert jury.on_turn_start("s1") is None                       # no stale feedback injected
+    assert len(list(jury.verdict_dir.glob("*.json"))) == 2       # both preserved
+    assert jury.pending == {}

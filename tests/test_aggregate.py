@@ -237,7 +237,7 @@ def test_verdict_carries_request_metadata():
     req.producer.model = "gpt-5.6"
     v = Panel([FakeJudge("accuracy")]).review(req)
     assert v.task_type == "summary" and v.domain == "finance" and v.producer.model == "gpt-5.6"
-    assert v.schema_version == "0.4" and req.schema_version == "0.4"
+    assert v.schema_version == "0.5" and req.schema_version == "0.5"
 
 
 def test_render_is_one_line():
@@ -245,3 +245,28 @@ def test_render_is_one_line():
             FakeJudge("d", provider="google", vote="abstain"))
     line = v.render()
     assert "\n" not in line and "▲1" in line and "jury 2/3 (1 abstained)" in line
+
+
+# --- identity -------------------------------------------------------------
+
+def test_config_id_changes_with_params():
+    a = FakeJudge("critic", params={"effort": "high"})
+    b = FakeJudge("critic", params={"effort": "medium"})
+    c = FakeJudge("critic", params={"effort": "high"})
+    assert a.config_id != b.config_id and a.config_id == c.config_id
+    assert run(a).reviews[0].config_id == a.config_id
+
+
+def test_panel_id_changes_with_params():
+    high = Panel([FakeJudge("critic", params={"effort": "high"})]).panel_id
+    med = Panel([FakeJudge("critic", params={"effort": "medium"})]).panel_id
+    assert high != med
+
+
+def test_same_request_two_runs_are_distinct():
+    req = ReviewRequest(task="t", output="o")
+    v1 = Panel([FakeJudge("accuracy")]).review(req)
+    v2 = Panel([FakeJudge("accuracy")]).review(req)
+    assert v1.request_id == v2.request_id and v1.run_id != v2.run_id
+    assert v1.filename != v2.filename and v1.filename.startswith(req.request_id)
+    assert v1.reviews[0].run_id == v1.run_id

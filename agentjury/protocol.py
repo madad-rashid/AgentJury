@@ -22,7 +22,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
-SCHEMA_VERSION = "0.4"
+SCHEMA_VERSION = "0.5"
 
 
 def _now() -> datetime:
@@ -120,7 +120,12 @@ class Review(BaseModel):
 
     review_id: str = Field(default_factory=_new_id)
     request_id: str | None = Field(default=None, description="The ReviewRequest this review is of.")
+    run_id: str | None = Field(default=None, description="The jury run this review was part of.")
     panel_id: str | None = Field(default=None, description="The panel this review was part of.")
+    config_id: str | None = Field(
+        default=None,
+        description="Hash of provider+model+role+prompt_hash+params: the reviewer's true identity for reputation.",
+    )
     judge: str = Field(description="Display name, e.g. 'critic/anthropic'.")
     role: str = Field(description="Judge role, e.g. 'critic'.")
     provider: str = Field(description="e.g. 'openai', 'anthropic', 'fake'.")
@@ -163,7 +168,8 @@ class Verdict(BaseModel):
     """The aggregate of all Reviews for one ReviewRequest."""
 
     schema_version: str = SCHEMA_VERSION
-    request_id: str
+    run_id: str = Field(default_factory=_new_id, description="One jury execution. The same request can be run many times.")
+    request_id: str = Field(description="The work being evaluated.")
     panel_id: str | None = Field(default=None, description="Hash of the judge roster that produced this verdict.")
     requested: int = Field(description="Judges asked to review.")
     responded: int = Field(description="Judges that returned a valid review.")
@@ -207,6 +213,11 @@ class Verdict(BaseModel):
     human_note: str | None = None
     adjudicated_at: datetime | None = None
     created_at: datetime = Field(default_factory=_now)
+
+    @property
+    def filename(self) -> str:
+        """<request_id>-<run_id>.json: groups runs of one request, keeps each run distinct."""
+        return f"{self.request_id}-{self.run_id}.json"
 
     def render(self) -> str:
         """Compact one-line summary, Reddit style."""

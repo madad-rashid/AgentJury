@@ -29,7 +29,7 @@ class Panel:
 
     @property
     def panel_id(self) -> str:
-        roster = "|".join(sorted(f"{j.name}:{j.model}:{j.prompt_hash}" for j in self.judges))
+        roster = "|".join(sorted(j.config_id for j in self.judges))
         return hashlib.sha256(roster.encode()).hexdigest()[:12]
 
     def review(self, request: ReviewRequest) -> Verdict:
@@ -49,12 +49,13 @@ class Panel:
         order = {j.name: i for i, j in enumerate(self.judges)}
         reviews.sort(key=lambda r: order.get(r.judge, 999))
 
-        for r in reviews:
-            r.request_id = request.request_id
-            r.panel_id = self.panel_id
-
-        return aggregate(
+        verdict = aggregate(
             request, reviews, errors,
             requested=len(self.judges), quorum=self.quorum, panel_id=self.panel_id,
             requested_providers=len({j.provider for j in self.judges}),
         )
+        for r in reviews:
+            r.request_id = request.request_id
+            r.run_id = verdict.run_id
+            r.panel_id = self.panel_id
+        return verdict
