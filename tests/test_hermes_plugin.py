@@ -176,3 +176,14 @@ def test_infer_provider(plugin):
     assert infer_provider("claude-sonnet-5") == "anthropic"
     assert infer_provider("gemini-3.7-flash") == "google"
     assert infer_provider("llama-4") is None and infer_provider(None) is None
+
+
+def test_alternative_payload_names_are_accepted(plugin, tmp_path):
+    jury, _ = make_jury(plugin, tmp_path, min_chars=10)
+    fut = jury.on_turn_end(task_id="s9", message="Do the thing", response="a long enough response here")
+    assert fut is not None and fut.result(10).status == "verified"
+
+
+def test_missing_response_is_skipped_not_crashed(plugin, tmp_path):
+    jury, _ = make_jury(plugin, tmp_path, min_chars=10)
+    assert jury.on_turn_end(session_id="s1", user_message="hi", something_else=42) is None

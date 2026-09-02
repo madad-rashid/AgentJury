@@ -210,9 +210,24 @@ class Jury:
                         tf.paths.append(p)
                 break
 
-    def on_turn_end(self, session_id: str, user_message: str, assistant_response: str,
-                    model: str | None = None, **_) -> Future | None:
-        if not assistant_response or len(assistant_response) < self.settings.min_chars:
+    RESPONSE_KEYS = ("assistant_response", "response", "assistant_message", "final_response", "reply", "content")
+    MESSAGE_KEYS = ("user_message", "message", "prompt", "input")
+
+    def on_turn_end(self, session_id: str | None = None, user_message: str | None = None,
+                    assistant_response: str | None = None, model: str | None = None, **kw) -> Future | None:
+        # Hermes builds vary in payload naming; accept the documented names and common alternatives.
+        if not assistant_response:
+            assistant_response = next((kw[k] for k in self.RESPONSE_KEYS if isinstance(kw.get(k), str) and kw[k]), None)
+        if not user_message:
+            user_message = next((kw[k] for k in self.MESSAGE_KEYS if isinstance(kw.get(k), str) and kw[k]), None)
+        session_id = session_id or kw.get("task_id") or kw.get("session") or "default"
+
+        if not assistant_response:
+            log.warning("agentjury: post_llm_call had no response text; payload keys=%s", sorted(kw))
+            return None
+        log.info("agentjury: post_llm_call session=%s chars=%d model=%s", session_id, len(assistant_response), model)
+        if len(assistant_response) < self.settings.min_chars:
+            log.info("agentjury: skipped, %d chars < min_chars %d", len(assistant_response), self.settings.min_chars)
             return None
         with self._lock:
             paths = self.files.pop(session_id, TurnFiles()).paths
@@ -242,6 +257,13 @@ class Jury:
     # -- work ----------------------------------------------------------------
 
     def _review(self, session_id: str, request: ReviewRequest, paths: list[str]) -> Verdict:
+        try:
+            return self._review_inner(session_id, request, paths)
+        except Exception:
+            log.exception("agentjury: review failed for session %s", session_id)
+            raise
+
+    def _review_inner(self, session_id: str, request: ReviewRequest, paths: list[str]) -> Verdict:
         if self._panel is None:
             self._panel = self._panel_factory(self.settings)
         verdict = self._panel.review(request)
