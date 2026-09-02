@@ -4,6 +4,11 @@ Command-line interface.
     agentjury review TASK OUTPUT [--panel SPEC] [--roles FILE] [--quorum N] [--task-type T] [--domain D] [--json]
     agentjury roles [--roles FILE]
     agentjury schema [request|verdict]
+    agentjury verdicts [--dir DIR] [-n N]
+    agentjury adjudicate ID [--judge J] [--finding N LABEL]... [--verdict agree|partial|disagree]
+                            [--producer-verdict correct|flawed] [--note TEXT] [--dir DIR]
+
+Verdicts are read from --dir, else $AGENTJURY_VERDICT_DIR, else .agentjury/verdicts.
 
 Exit codes: 0 verified, 1 needs_revision, 2 blocked, 3 insufficient_jury.
 
@@ -27,7 +32,7 @@ from dotenv import load_dotenv
 from .judges import ROLES, anthropic_judge, load_roles, openai_judge
 from .judges.base import Judge
 from .panel import Panel
-from .protocol import Producer, ReviewRequest, Verdict
+from .protocol import HumanReview, Producer, ReviewRequest, Verdict
 
 DEFAULT_PANEL = "accuracy:openai,critic:anthropic,executive:openai"
 VERDICT_DIR = Path(".agentjury") / "verdicts"
@@ -125,6 +130,90 @@ def cmd_review(args: argparse.Namespace) -> int:
     return EXIT[verdict.status]
 
 
+def verdict_dir(args: argparse.Namespace) -> Path:
+    return Path(getattr(args, "dir", None) or os.environ.get("AGENTJURY_VERDICT_DIR") or VERDICT_DIR)
+
+
+def load_verdict(args: argparse.Namespace) -> tuple[Path, Verdict]:
+    ref = args.request_id
+    path = Path(ref)
+    if not path.is_file():
+        d = verdict_dir(args)
+        candidates = sorted(d.glob(f"{ref}*.json")) if d.is_dir() else []
+        if len(candidates) != 1:
+            hint = f"{len(candidates)} matches" if candidates else "no match"
+            sys.exit(f"Cannot find verdict {ref!r} in {d} ({hint}). Use `agentjury verdicts --dir {d}` to list.")
+        path = candidates[0]
+    return path, Verdict.model_validate_json(path.read_text(encoding="utf-8"))
+
+
+def cmd_verdicts(args: argparse.Namespace) -> int:
+    d = verdict_dir(args)
+    files = sorted(d.glob("*.json"), key=lambda f: f.stat().st_mtime, reverse=True) if d.is_dir() else []
+    if not files:
+        print(f"No verdicts in {d}")
+        return 0
+    print(f"{d}\n")
+    for f in files[: args.n]:
+        v = Verdict.model_validate_json(f.read_text(encoding="utf-8"))
+        graded = sum(1 for r in v.reviews for fi in r.findings if fi.adjudication)
+        total = sum(len(r.findings) for r in v.reviews)
+        mark = f"  [adjudicated {graded}/{total}]" if graded else ""
+        prod = f"  producer:{v.human_verdict}" if v.human_verdict else ""
+        print(f"{v.request_id}  {v.created_at:%Y-%m-%d %H:%M}  {v.render()}{mark}{prod}")
+    return 0
+
+
+def cmd_adjudicate(args: argparse.Namespace) -> int:
+    from datetime import datetime, timezone
+
+    path, v = load_verdict(args)
+    now = datetime.now(timezone.utc)
+    changed: list[str] = []
+
+    if args.finding or args.verdict:
+        if not args.judge:
+            sys.exit("--judge is required when grading findings or a review. Judges: " +
+                     ", ".join(r.judge for r in v.reviews))
+        matches = [r for r in v.reviews if r.judge == args.judge or r.review_id == args.judge
+                   or r.role == args.judge]
+        if len(matches) != 1:
+            sys.exit(f"--judge {args.judge!r} matched {len(matches)} reviews. Judges: " +
+                     ", ".join(r.judge for r in v.reviews))
+        review = matches[0]
+        for ref, label in args.finding or []:
+            if label not in ("correct", "partially_correct", "wrong"):
+                sys.exit(f"Finding label must be correct, partially_correct, or wrong; got {label!r}.")
+            target = None
+            if ref.isdigit() and 1 <= int(ref) <= len(review.findings):
+                target = review.findings[int(ref) - 1]
+            else:
+                target = next((f for f in review.findings if f.id == ref), None)
+            if target is None:
+                sys.exit(f"{review.judge} has no finding {ref!r} (it has {len(review.findings)}).")
+            target.adjudication = label
+            target.adjudicated_at = now
+            changed.append(f"{review.judge} finding {ref}: {label}")
+        if args.verdict:
+            review.human_review = HumanReview(verdict=args.verdict, note=args.note, reviewed_at=now)
+            changed.append(f"{review.judge} review: {args.verdict}")
+
+    if args.producer_verdict:
+        v.human_verdict = args.producer_verdict
+        v.human_note = args.note
+        v.adjudicated_at = now
+        changed.append(f"producer output: {args.producer_verdict}")
+
+    if not changed:
+        sys.exit("Nothing to record. Give --finding, --verdict, or --producer-verdict.")
+
+    path.write_text(v.model_dump_json(indent=2), encoding="utf-8")
+    print(f"{v.request_id}  {path}")
+    for c in changed:
+        print(f"  {c}")
+    return 0
+
+
 def cmd_roles(args: argparse.Namespace) -> int:
     if args.roles:
         load_roles(args.roles)
@@ -166,6 +255,22 @@ def main(argv: list[str] | None = None) -> int:
     r = sub.add_parser("roles", help="List available judge roles.")
     r.add_argument("--roles", default=os.environ.get("AGENTJURY_ROLES"), help="JSON file of extra roles.")
     r.set_defaults(func=cmd_roles)
+
+    vl = sub.add_parser("verdicts", help="List saved verdicts, newest first.")
+    vl.add_argument("--dir", help="Verdict directory (default: $AGENTJURY_VERDICT_DIR or .agentjury/verdicts).")
+    vl.add_argument("-n", type=int, default=20, help="How many to show.")
+    vl.set_defaults(func=cmd_verdicts)
+
+    a = sub.add_parser("adjudicate", help="Record a human judgement on a saved verdict.")
+    a.add_argument("request_id", help="Verdict id (or unique prefix), or a path to its JSON file.")
+    a.add_argument("--dir", help="Verdict directory (default: $AGENTJURY_VERDICT_DIR or .agentjury/verdicts).")
+    a.add_argument("--judge", help="Which review to grade: judge name (critic/anthropic), role, or review_id.")
+    a.add_argument("--finding", nargs=2, action="append", metavar=("N", "LABEL"),
+                   help="Grade finding N (1-based, as shown) as correct, partially_correct, or wrong. Repeatable.")
+    a.add_argument("--verdict", choices=["agree", "partial", "disagree"], help="Your overall view of that judge's review.")
+    a.add_argument("--producer-verdict", choices=["correct", "flawed"], help="Your view of the agent's output itself.")
+    a.add_argument("--note", help="Free-text reason, stored with the review and/or producer verdict.")
+    a.set_defaults(func=cmd_adjudicate)
 
     s = sub.add_parser("schema", help="Print the JSON schema for the protocol objects.")
     s.add_argument("object", choices=["request", "verdict"], nargs="?", default="verdict")

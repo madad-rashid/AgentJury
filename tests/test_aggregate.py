@@ -237,7 +237,7 @@ def test_verdict_carries_request_metadata():
     req.producer.model = "gpt-5.6"
     v = Panel([FakeJudge("accuracy")]).review(req)
     assert v.task_type == "summary" and v.domain == "finance" and v.producer.model == "gpt-5.6"
-    assert v.schema_version == "0.3" and req.schema_version == "0.3"
+    assert v.schema_version == "0.4" and req.schema_version == "0.4"
 
 
 def test_render_is_one_line():

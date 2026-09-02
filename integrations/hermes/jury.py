@@ -144,16 +144,18 @@ def write_sidecar(path: Path, verdict: Verdict) -> Path:
 
 
 def render_verdict(verdict: Verdict, files: list[str] | None = None) -> str:
-    lines = [verdict.render(), f"jury confidence index {verdict.confidence:.0%}"]
+    lines = [f"{verdict.render()}   id {verdict.request_id}",
+             f"jury confidence index {verdict.confidence:.0%}"]
     for r in verdict.reviews:
         arrow = {"approve": "▲", "revise": "▼", "abstain": "–"}[r.vote]
         lines.append(f"{arrow} {r.score:.0f}  {r.judge}: {r.reason}")
-        for f in r.findings:
-            lines.append(f"      [{f.severity}] {f.text}")
+        for i, f in enumerate(r.findings, 1):
+            lines.append(f"      {i}. [{f.severity}] {f.text}")
     for e in verdict.errors:
         lines.append(f"!  {e}")
     if files:
         lines.append("files: " + ", ".join(files))
+    lines.append(f"adjudicate: agentjury adjudicate {verdict.request_id} --dir <hermes-home>/plugin-data/agentjury/verdicts ...")
     return "\n".join(lines)
 
 

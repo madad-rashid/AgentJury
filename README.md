@@ -62,6 +62,23 @@ Judges treat everything they review as untrusted data. Instructions hidden insid
 the output are reported as a blocking finding. `tests/test_adversarial_live.py`
 attacks the jury with `examples/injected_output.md`; run it with `AGENTJURY_LIVE=1`.
 
+## Adjudication
+
+Reputation is built from human grading of individual findings, not whole reviews.
+
+```
+agentjury verdicts --dir <where-verdicts-live>
+agentjury adjudicate 9a9a900dc86b --judge critic/anthropic \
+    --finding 1 wrong --finding 2 wrong --finding 3 correct \
+    --verdict disagree --note "figure is in the cited BIS source"
+agentjury adjudicate 9a9a900dc86b --producer-verdict correct
+```
+
+Findings are numbered as displayed. Grades are written back into the verdict JSON:
+`adjudication` on each finding, `human_review` on the review, `human_verdict` on the
+verdict for the producer's output itself. Set `AGENTJURY_VERDICT_DIR` to avoid
+repeating `--dir`.
+
 ## Custom roles
 
 Give a jury domain expertise with a JSON file of `{"role_name": "description"}`:
@@ -81,7 +98,7 @@ agentjury review task.md output.md --roles examples/roles.json --panel accuracy:
 Core frozen at v0.3. Collecting real verdicts through the Hermes integration.
 Human adjudication and reviewer reputation follow once there is data to calibrate against.
 
-## Protocol (schema 0.3)
+## Protocol (schema 0.4)
 
 Three objects, printable with `agentjury schema request` / `agentjury schema verdict`:
 
@@ -111,7 +128,7 @@ Hermes, Claude Code, Codex, CrewAI, LangGraph, AutoGen, or your own.
 - [x] Review-event schema with telemetry and adjudication slots
 - [x] Quorum, non-unilateral blocking, prompt-injection defence, custom roles
 - [x] Abstain vote, provider floor, retry/repair/timeouts, CI
-- [ ] Human adjudication command
+- [x] Human adjudication: `agentjury adjudicate` grades each finding and each review
 - [ ] Reviewer reputation by task type, weighted by human agreement over time
 - [ ] Jury diversity weighting from historical disagreement
 

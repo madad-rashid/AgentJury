@@ -22,7 +22,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
-SCHEMA_VERSION = "0.3"
+SCHEMA_VERSION = "0.4"
 
 
 def _now() -> datetime:
@@ -201,6 +201,11 @@ class Verdict(BaseModel):
     errors: list[str] = Field(
         default_factory=list, description="Judges that failed to return a review, with the reason."
     )
+    human_verdict: Literal["correct", "flawed"] | None = Field(
+        default=None, description="A human's judgement of the producer's output itself, independent of the judges."
+    )
+    human_note: str | None = None
+    adjudicated_at: datetime | None = None
     created_at: datetime = Field(default_factory=_now)
 
     def render(self) -> str:
