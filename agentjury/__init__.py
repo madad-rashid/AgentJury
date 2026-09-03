@@ -1,4 +1,4 @@
-"""AgentJury: an open peer-review and reputation layer for AI agents."""
+"""AgentJury: peer review for AI agents."""
 
 from .aggregate import aggregate
 from .panel import Panel
@@ -14,7 +14,7 @@ from .protocol import (
     Vote,
 )
 
-__version__ = "0.4.1"
+__version__ = "0.4.3"
 
 __all__ = [
     "SCHEMA_VERSION", "Artifact", "Finding", "HumanReview", "Producer",
