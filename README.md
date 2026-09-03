@@ -33,10 +33,10 @@ Open an issue at <https://github.com/madad-rashid/AgentJury/issues>. Please do n
 
 ## Quick start
 
-Install the current public-alpha code directly from GitHub:
+Install AgentJury from PyPI:
 
 ```bash
-pip install "agentjury[all] @ git+https://github.com/madad-rashid/AgentJury.git"
+pip install "agentjury[all]"
 ```
 
 Set `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` in your environment or a local `.env` file, then review an agent output:
@@ -211,7 +211,7 @@ The next research step is reviewer reputation by task type using human-adjudicat
 - [x] Quorum, non-unilateral blocking, prompt-injection defence, custom roles
 - [x] Abstain vote, provider floor, retry, repair, timeouts, CI
 - [x] Human finding-level adjudication and append-only adjudication history
-- [ ] PyPI release
+- [x] PyPI release
 - [ ] Additional judge providers and local-model adapter
 - [ ] Reviewer reputation by task type, weighted by human agreement over time
 - [ ] Jury diversity weighting from historical disagreement
