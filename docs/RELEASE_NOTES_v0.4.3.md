@@ -38,16 +38,16 @@ Reviewer reputation and diversity weighting remain future work. They will be des
 
 ## Install
 
-Before the first PyPI publication, install directly from GitHub:
-
-```bash
-pip install "agentjury[all] @ git+https://github.com/madad-rashid/AgentJury.git"
-```
-
-After the PyPI package is published, the target install command is:
+AgentJury 0.4.3 is published on PyPI:
 
 ```bash
 pip install "agentjury[all]"
+```
+
+Developers who want the latest unreleased code can install from GitHub instead:
+
+```bash
+pip install "agentjury[all] @ git+https://github.com/madad-rashid/AgentJury.git"
 ```
 
 ## Feedback
