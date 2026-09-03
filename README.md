@@ -1,142 +1,221 @@
 # AgentJury
 
 [![tests](https://github.com/madad-rashid/AgentJury/actions/workflows/tests.yml/badge.svg)](https://github.com/madad-rashid/AgentJury/actions/workflows/tests.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-**An open peer-review and reputation layer for AI agents.**
+**Peer review for AI agents.**
 
-When an agent finishes a task, AgentJury sends the task and its output to a
-panel of independent AI judges. Each judge votes ▲ approve or ▼ revise, scores
-the work, and explains why. AgentJury aggregates the votes into a verdict.
+Your agent says the task is finished. AgentJury asks independent, blind AI reviewers whether the work is good enough before you trust it.
 
-```
+Each reviewer votes ▲ approve, ▼ revise, or – abstain. AgentJury combines those opinions with deterministic rules. No final LLM gets a deciding vote.
+
+```text
 Controlled Institutional Private-Credit Pilot.md   +43
 ▲4 ▼1   score 8.7   consensus 80%   verified
 ```
 
-Judges never see each other's votes before submitting their own, so they
-can't anchor on one another.
+AgentJury is framework-independent. The first live integration is Hermes, and the core protocol works with any system that can build a `ReviewRequest`.
+
+## Looking for testers
+
+AgentJury is in public alpha. I am looking for developers running real agent workflows who are willing to test the jury on completed tasks and report where it fails.
+
+Useful feedback includes:
+
+- the framework or agent you used
+- the reviewer panel and models
+- the verdict, latency, and approximate cost
+- reviewer disagreements or false findings
+- installation friction and integration problems
+
+Open an issue at <https://github.com/madad-rashid/AgentJury/issues>. Please do not post proprietary task content or API keys.
 
 ## Quick start
 
+Install the current public-alpha code directly from GitHub:
+
+```bash
+pip install "agentjury[all] @ git+https://github.com/madad-rashid/AgentJury.git"
 ```
-pip install -e ".[all]"
-cp .env.example .env        # add your OPENAI_API_KEY and ANTHROPIC_API_KEY
+
+Set `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` in your environment or a local `.env` file, then review an agent output:
+
+```bash
 agentjury review task.md output.md
 ```
 
-```
+Example:
+
+```text
 ▲2 ▼1  score 7.0  consensus 67%  diversity 67%  jury 3/3  verified
 jury confidence index 35%  (heuristic, not a probability)
 
 ▲  8  accuracy/openai        Sourced figure, drivers accurately characterized.
-▼  5  critic/anthropic       Preqin citation has no year or report; 'rivals high-yield' is unsupported.
-▲  8  executive/openai       Concise and investor-relevant.
+▼  5  critic/anthropic       Citation has no year or report; one claim is unsupported.
+▲  8  executive/openai       Concise and decision-ready.
 ```
 
-Choose your own panel with `--panel accuracy:openai,critic:anthropic,evidence:anthropic,executive:openai`.
-Run `agentjury roles` to see what each role looks for. Every verdict is saved to `.agentjury/verdicts/`.
+Choose your own panel:
+
+```bash
+agentjury review task.md output.md \
+  --panel accuracy:openai,critic:anthropic,evidence:anthropic,executive:openai
+```
+
+Run `agentjury roles` to see the built-in roles. Every verdict is saved to `.agentjury/verdicts/`.
+
+## Architecture
+
+```mermaid
+flowchart LR
+    A[Agent or framework] --> R[ReviewRequest]
+    R --> O[OpenAI judge]
+    R --> C[Anthropic judge]
+    R --> X[Local or custom judge]
+    O --> G[Deterministic aggregator]
+    C --> G
+    X --> G
+    G --> V[Verdict]
+    V --> H[Human adjudication]
+    H --> P[(Future reviewer reputation)]
+```
+
+AgentJury separates generation from verification. Reviewers see the task and output, but never see one another's votes before submitting their own.
+
+## Design principles
+
+- **Blind review.** Judges do not see other reviewers' opinions before voting.
+- **Deterministic aggregation.** No model acts as a final arbiter.
+- **Provider diversity.** A multi-provider jury cannot verify work from one provider's judges alone.
+- **Strict quorum.** Failed calls and abstentions do not silently become approval.
+- **No unilateral block.** A single reviewer cannot block a task by itself.
+- **Auditable identity.** Requests, runs, reviews, reviewer configurations, and findings each have stable IDs.
+- **Human adjudication.** Individual findings can be graded so reviewer reliability can later be measured from evidence rather than assumed.
+- **Framework independence.** AgentJury reviews work produced elsewhere. It is not another agent framework.
 
 ## How a verdict is reached
 
-Judges vote ▲ approve, ▼ revise, or – abstain. Abstentions are recorded but never
-counted as approval, and they count against quorum.
+Judges vote ▲ approve, ▼ revise, or – abstain. Abstentions are recorded but never counted as approval, and they count against quorum.
 
-No single judge can block. `blocked` requires blocking findings from two
-different providers; one blocking finding downgrades to `needs_revision`.
+No single judge can block. `blocked` requires blocking findings from two different providers. One blocking finding downgrades the result to `needs_revision`.
 
-A panel needs a quorum of voters, by default a strict majority of requested
-judges (1→1, 2→2, 3→2, 4→3, 5→3). A panel built from several providers must also
-hear from at least two of them. Otherwise the status is `insufficient_jury` and
-the votes are informational only.
+A panel needs a quorum of voters, by default a strict majority of requested judges:
 
-Each judge call has a timeout, one retry on provider error, and one repair
-round-trip if the reply is not valid JSON, after which the judge is marked
-failed and the panel continues without it.
+```text
+1→1, 2→2, 3→2, 4→3, 5→3, 6→4
+```
 
-Exit codes: `0` verified, `1` needs_revision, `2` blocked, `3` insufficient_jury.
+A panel built from several providers must also hear from at least two of them. Otherwise the status is `insufficient_jury` and the votes are informational only.
 
-The confidence figure is a heuristic index, not a calibrated probability. It will
-be calibrated against human adjudication once enough exists.
+Each judge call has a timeout, one retry on provider error, and one repair round-trip if the reply is not valid JSON. A failed judge is recorded as an error and the rest of the panel continues.
 
-Judges treat everything they review as untrusted data. Instructions hidden inside
-the output are reported as a blocking finding. `tests/test_adversarial_live.py`
-attacks the jury with `examples/injected_output.md`; run it with `AGENTJURY_LIVE=1`.
+Exit codes:
+
+```text
+0  verified
+1  needs_revision
+2  blocked
+3  insufficient_jury
+```
+
+The confidence figure is a heuristic index, not a calibrated probability. The plan is to calibrate it against human adjudication once enough real data exists.
+
+Judges treat everything they review as untrusted data. Instructions hidden inside an agent output are treated as content, not reviewer instructions. `tests/test_adversarial_live.py` attacks the jury with `examples/injected_output.md`; run it with `AGENTJURY_LIVE=1`.
 
 ## Adjudication
 
-Reputation is built from human grading of individual findings, not whole reviews.
+Reputation is designed to come from human grading of individual findings, not from treating an entire review as one correct or incorrect event.
 
-```
+```bash
 agentjury verdicts --dir <where-verdicts-live>
 agentjury adjudicate 9a9a900dc86b --judge critic/anthropic \
     --finding 1 wrong --finding 2 wrong --finding 3 correct \
-    --verdict disagree --note "figure is in the cited BIS source"
+    --verdict disagree --note "figure is in the cited source"
 agentjury adjudicate 9a9a900dc86b --producer-verdict correct
 ```
 
-Findings are numbered as displayed. Grades are written back into the verdict JSON
-(current state) and appended as events to `adjudications.jsonl` in the same folder
-(history: who changed which finding from what to what, when, and why). Set
-`AGENTJURY_VERDICT_DIR` to avoid repeating `--dir`.
+Findings are numbered as displayed. Grades are written back into the verdict JSON as current state and appended as events to `adjudications.jsonl` in the same folder. The event log records who changed which finding, from what to what, when, and why.
 
-Identity: `request_id` is the work being evaluated, `run_id` is one jury execution of it
-(the same request can be judged by several panels), `review_id` is one judge's opinion,
-`config_id` is the judge's identity for reputation (provider, model, role, prompt hash,
-and parameters such as effort), and each finding has its own `id`. Verdicts are saved as
-`<request_id>-<run_id>.json`.
+Set `AGENTJURY_VERDICT_DIR` to avoid repeating `--dir`.
+
+Identity hierarchy:
+
+- `request_id`: the work being evaluated
+- `run_id`: one jury execution of that request
+- `review_id`: one judge's opinion
+- `config_id`: the reviewer configuration used for future reputation measurement, including provider, model, role, prompt hash, and relevant parameters
+- `finding.id`: one specific issue raised by a reviewer
+
+Verdicts are saved as `<request_id>-<run_id>.json`.
 
 ## Custom roles
 
 Give a jury domain expertise with a JSON file of `{"role_name": "description"}`:
 
-```
-agentjury review task.md output.md --roles examples/roles.json --panel accuracy:openai,domain_expert:anthropic,executive:openai
+```bash
+agentjury review task.md output.md \
+  --roles examples/roles.json \
+  --panel accuracy:openai,domain_expert:anthropic,executive:openai
 ```
 
 ## Integrations
 
-- **Hermes Agent**: `integrations/hermes/` is a Hermes plugin that reviews every
-  substantial response, writes the verdict into the frontmatter of notes Hermes
-  produced, and feeds findings back on the next turn. See its README.
+### Hermes Agent
+
+`integrations/hermes/` contains the first live integration. It reviews substantial Hermes responses in the background, saves verdicts, writes verdict metadata into markdown frontmatter, and feeds major findings back on the next relevant turn.
+
+See [integrations/hermes/README.md](integrations/hermes/README.md) for installation and configuration.
+
+Adapters for other agent frameworks are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Protocol
+
+Current schema: **0.5**.
+
+Print the schemas with:
+
+```bash
+agentjury schema request
+agentjury schema verdict
+```
+
+The main objects are:
+
+- `ReviewRequest`: task, agent output, optional context and artifacts, task type, domain, and producer metadata
+- `Review`: one independent judge opinion with vote, score, reason, findings, IDs, reviewer configuration, telemetry, and adjudication slots
+- `Verdict`: deterministic aggregate with votes, score, consensus, diversity, confidence index, status, and the underlying reviews
+
+Every field needed by the planned reputation system is recorded from the first review. Reputation weighting is not active yet.
+
+## Development
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup, tests, judge-provider adapters, framework integrations, and pull requests.
+
+See [docs/PUBLISHING.md](docs/PUBLISHING.md) for the release and PyPI checklist.
 
 ## Status
 
-Core frozen at v0.3. Collecting real verdicts through the Hermes integration.
-Human adjudication and reviewer reputation follow once there is data to calibrate against.
+Public alpha. The core aggregation rules are intentionally stable while real verdicts are collected through the Hermes integration and direct CLI use.
 
-## Protocol (schema 0.5)
-
-Three objects, printable with `agentjury schema request` / `agentjury schema verdict`:
-
-- `ReviewRequest` — the task, the agent's output, optional context and artifacts, plus
-  `task_type`, `domain`, and the `producer` (agent, framework, provider, model)
-- `Review` — one judge's independent vote, score, reason, and a list of `findings`
-  each with a severity. Stands alone as a dataset row: carries `review_id`,
-  `request_id`, `run_id`, `panel_id`, `config_id`, the judge's role, provider, model,
-  prompt hash, rubric version, model `params` (effort, thinking, max_tokens), latency, and token usage,
-  and leaves a `human_review` slot and a per-finding `adjudication` slot for later
-  human grading
-- `Verdict` — the aggregate: votes, score, consensus, diversity, confidence, status
-
-Every field reputation will need is recorded from the first review. Reputation
-weighting itself is not active yet.
-
-Any agent framework that can build a `ReviewRequest` can use AgentJury:
-Hermes, Claude Code, Codex, CrewAI, LangGraph, AutoGen, or your own.
+The next research step is reviewer reputation by task type using human-adjudicated findings, followed by diversity weighting from observed disagreement patterns.
 
 ## Roadmap
 
 - [x] Protocol schema
 - [x] Judge interface with OpenAI and Anthropic adapters
-- [x] Aggregator (votes, score, consensus, confidence)
+- [x] Deterministic aggregator
 - [x] CLI: `agentjury review task.md output.md`
-- [x] First framework integration: Hermes plugin (`integrations/hermes/`)
+- [x] Hermes integration
 - [x] Review-event schema with telemetry and adjudication slots
 - [x] Quorum, non-unilateral blocking, prompt-injection defence, custom roles
-- [x] Abstain vote, provider floor, retry/repair/timeouts, CI
-- [x] Human adjudication: `agentjury adjudicate` grades each finding and each review
+- [x] Abstain vote, provider floor, retry, repair, timeouts, CI
+- [x] Human finding-level adjudication and append-only adjudication history
+- [ ] PyPI release
+- [ ] Additional judge providers and local-model adapter
 - [ ] Reviewer reputation by task type, weighted by human agreement over time
 - [ ] Jury diversity weighting from historical disagreement
+- [ ] Calibrated confidence from observed outcomes
 
 ## License
 
