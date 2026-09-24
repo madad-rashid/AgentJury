@@ -94,6 +94,14 @@ Severity = Literal["minor", "major", "blocking"]
 Adjudication = Literal["correct", "partially_correct", "wrong"]
 
 
+class FindingEvidence(BaseModel):
+    """Short excerpts used to check the provenance of a judge's finding."""
+
+    output_quote: str
+    basis_source: Literal["task", "context", "output", "reviewer_rule"]
+    basis_quote: str
+
+
 class Finding(BaseModel):
     """One specific problem a judge raised. Adjudicated individually by a human,
     so a review with five findings and one mistake keeps credit for four."""
@@ -101,6 +109,7 @@ class Finding(BaseModel):
     id: str = Field(default_factory=lambda: uuid4().hex[:8])
     text: str
     severity: Severity = "minor"
+    evidence: FindingEvidence | None = None
     adjudication: Adjudication | None = Field(
         default=None, description="Set by a human later. None means not yet reviewed."
     )
