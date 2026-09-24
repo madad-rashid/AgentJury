@@ -33,21 +33,20 @@ class Panel:
         return hashlib.sha256(roster.encode()).hexdigest()[:12]
 
     def review(self, request: ReviewRequest) -> Verdict:
-        reviews: list[Review] = []
+        completed: list[tuple[int, Review]] = []
         errors: list[str] = []
 
         with ThreadPoolExecutor(max_workers=self.max_workers) as pool:
-            futures = {pool.submit(j.review, request): j for j in self.judges}
+            futures = {pool.submit(j.review, request): (i, j) for i, j in enumerate(self.judges)}
             for future in as_completed(futures):
-                judge = futures[future]
+                index, judge = futures[future]
                 try:
-                    reviews.append(future.result())
+                    completed.append((index, future.result()))
                 except Exception as exc:  # noqa: BLE001 - one bad judge must not sink the panel
                     errors.append(f"{judge.name}: {type(exc).__name__}: {exc}")
 
         # Keep judge order stable in the output regardless of who finished first.
-        order = {j.name: i for i, j in enumerate(self.judges)}
-        reviews.sort(key=lambda r: order.get(r.judge, 999))
+        reviews = [review for _, review in sorted(completed, key=lambda item: item[0])]
 
         verdict = aggregate(
             request, reviews, errors,
