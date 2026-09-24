@@ -183,6 +183,10 @@ REPAIR_TEMPLATE = """Your previous reply could not be parsed as JSON. It began:
 Reply again with ONLY the JSON object described in your instructions. No prose, no code fences."""
 
 
+class CompletionBudgetExhausted(Exception):
+    """A caller-enforced budget stopped a completion before it was sent."""
+
+
 class Judge(ABC):
     """One reviewer: a role plus a model that plays it.
 
@@ -221,6 +225,8 @@ class Judge(ABC):
         for attempt in range(self.retries + 1):
             try:
                 return self.complete(system, user)
+            except CompletionBudgetExhausted:
+                raise
             except Exception as exc:  # noqa: BLE001 - provider errors are heterogeneous
                 last = exc
                 if attempt < self.retries:
