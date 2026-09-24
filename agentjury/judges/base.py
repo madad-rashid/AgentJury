@@ -40,12 +40,7 @@ ROLES: dict[str, str] = {
     "evidence": (
         "You check whether claims are supported. Every non-obvious assertion should "
         "have a source, a calculation, or a stated assumption behind it. Flag anything "
-        "presented as fact without support. When the task asks for a source, a "
-        "material time-sensitive number needs an identifiable source and an "
-        "as-of date. A bare organisation name or 'today' is not traceable. "
-        "If either is missing, vote revise and mark that finding blocking: the "
-        "answer cannot be used as-is. Do not demand dates for timeless facts "
-        "or claim the number is false merely because its source is incomplete."
+        "presented as fact without support."
     ),
     "executive": (
         "You represent the person who asked for this. Is it useful, concise, "
