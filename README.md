@@ -65,6 +65,48 @@ agentjury review task.md output.md \
 
 Run `agentjury roles` to see the built-in roles. Every verdict is saved to `.agentjury/verdicts/`.
 
+### One key or a local model
+
+OpenRouter and local-model support is available in the repository checkout. Until
+the next PyPI release, install that checkout with `pip install -e ".[all]"`.
+[OpenRouter](https://openrouter.ai/docs/quickstart) needs one
+`OPENROUTER_API_KEY` even when the panel uses models from different vendors:
+
+```powershell
+$env:OPENROUTER_API_KEY = 'your-key'
+agentjury review task.md output.md --panel 'accuracy:openrouter:openai/gpt-4o,critic:openrouter:anthropic/claude-sonnet-4'
+```
+
+Choose model slugs currently supported by OpenRouter. Use a stable
+`vendor/model` slug; dynamic aliases are rejected because AgentJury uses the
+vendor prefix for the provider-diversity rule. These examples send the task and
+agent output to OpenRouter.
+
+With [Ollama](https://ollama.com/) running locally and `qwen3:8b` installed,
+no API key is needed:
+
+```powershell
+agentjury review task.md output.md --panel 'accuracy:ollama:qwen3:8b,critic:ollama:qwen3:8b'
+```
+
+Substitute any installed Ollama model. The default endpoint is
+`http://127.0.0.1:11434/v1`; set `AGENTJURY_OLLAMA_BASE_URL` to use another
+Ollama endpoint. Two Ollama judges still count as one provider for diversity.
+
+For another OpenAI-compatible chat endpoint, such as LM Studio, set its base
+URL and optionally its API key:
+
+```powershell
+$env:AGENTJURY_COMPATIBLE_BASE_URL = 'http://127.0.0.1:1234/v1'
+agentjury review task.md output.md --panel 'accuracy:compatible:local-model'
+```
+
+Set `AGENTJURY_COMPATIBLE_API_KEY` if the endpoint requires one. AgentJury sends
+the task and output to that endpoint, which may be remote if you configure a
+remote URL. All custom-endpoint judges count as one provider. Panel entries use
+`role:provider:model` for these routes; the existing `role:openai` and
+`role:anthropic` forms remain valid.
+
 ## Architecture
 
 ```mermaid
@@ -212,7 +254,7 @@ The next research step is reviewer reputation by task type using human-adjudicat
 - [x] Abstain vote, provider floor, retry, repair, timeouts, CI
 - [x] Human finding-level adjudication and append-only adjudication history
 - [x] PyPI release
-- [ ] Additional judge providers and local-model adapter
+- [x] OpenRouter, Ollama, and configurable OpenAI-compatible judge routes
 - [ ] Reviewer reputation by task type, weighted by human agreement over time
 - [ ] Jury diversity weighting from historical disagreement
 - [ ] Calibrated confidence from observed outcomes

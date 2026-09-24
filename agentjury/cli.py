@@ -13,8 +13,8 @@ Verdicts are read from --dir, else $AGENTJURY_VERDICT_DIR, else .agentjury/verdi
 Exit codes: 0 verified, 1 needs_revision, 2 blocked, 3 insufficient_jury.
 
 TASK and OUTPUT are files (or "-" to read OUTPUT from stdin).
-PANEL is a comma-separated list of role:provider pairs, for example
-    accuracy:openai,critic:anthropic,executive:openai
+PANEL is a comma-separated list of role:provider[:model] entries, for example
+    accuracy:openai,critic:openrouter:anthropic/claude-sonnet-4
 Every verdict is saved to .agentjury/verdicts/<request_id>.json so that
 reviews accumulate over time.
 """
@@ -250,7 +250,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("output", help="File containing the agent's output, or - for stdin.")
     p.add_argument("--context", help="File with background the judges should know.")
     p.add_argument("--panel", default=os.environ.get("AGENTJURY_PANEL", DEFAULT_PANEL),
-                   help=f"role:provider pairs, comma-separated (default: {DEFAULT_PANEL})")
+                   help=f"role:provider[:model] entries, comma-separated (default: {DEFAULT_PANEL})")
     p.add_argument("--roles", default=os.environ.get("AGENTJURY_ROLES"),
                    help="JSON file of extra roles {name: description}, e.g. a domain expert.")
     p.add_argument("--quorum", type=int, help="Minimum judges that must respond (default: majority).")

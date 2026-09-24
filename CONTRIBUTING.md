@@ -59,6 +59,15 @@ To add a provider:
 7. Disable hidden SDK retries where practical so AgentJury's retry policy stays observable.
 8. Add unit tests for success, provider failure, malformed output, retry, and telemetry.
 
+OpenRouter, Ollama, and other OpenAI-compatible chat services share
+`agentjury/judges/compatible.py`; extend its route configuration when an
+endpoint follows the same request and response shape. Panel syntax and judge
+construction live in `agentjury/panel_config.py`, which is shared by the CLI
+and Hermes. Add a separate adapter only when a provider needs a different API.
+Never put a raw endpoint URL or API key in `Review.params` or `config_id`.
+For routed models, preserve the underlying model vendor as `Review.provider`
+when it can be identified; local and custom endpoints count as one provider.
+
 Provider adapters must not expose other reviewers' votes to the model. Blind review is a core protocol property.
 
 ## Adding a reviewer role
