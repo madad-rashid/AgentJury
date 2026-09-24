@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,6 +13,7 @@ from typing import Callable
 
 from .benchmark_cases import BenchmarkCase, case_hash, case_request
 from .judges.base import CompletionBudgetExhausted, Judge
+from .judges.compatible import OLLAMA_URL, OPENROUTER_URL
 from .panel import Panel
 from .panel_config import build_panel
 from .protocol import Review
@@ -38,6 +40,8 @@ class Candidate:
 def prepare(cases: list[BenchmarkCase], specs: list[str]) -> list[Candidate]:
     if not cases or not specs:
         raise ValueError("Benchmark needs cases and at least one panel.")
+    if len(specs) != len(set(specs)):
+        raise ValueError("Benchmark contains a duplicate panel spec.")
     candidates = [Candidate(spec, build_panel(spec)) for spec in specs]
     for candidate in candidates:
         _check_candidate(candidate)
@@ -87,12 +91,15 @@ def maximum_attempts(cases: list[BenchmarkCase], candidates: list[Candidate]) ->
 
 def _safe_error(exc: Exception) -> str:
     status = getattr(exc, "status_code", None)
+    if not isinstance(status, int):
+        match = re.search(r"\bHTTP ([1-5][0-9]{2})\b", str(exc))
+        status = int(match.group(1)) if match else None
     suffix = f" HTTP {status}" if isinstance(status, int) else ""
     return f"{type(exc).__name__}{suffix}"
 
 
 def _redact_review(review: Review, case: BenchmarkCase) -> dict:
-    needles = [case.task, case.output, case.context or ""]
+    needles = [case.task, case.output, case.context or "", OPENROUTER_URL, OLLAMA_URL]
     needles += [os.environ.get(name, "") for name in (
         "OPENROUTER_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY",
         "AGENTJURY_COMPATIBLE_API_KEY", "AGENTJURY_COMPATIBLE_BASE_URL",
@@ -181,6 +188,7 @@ def run(
             continue
         if old:
             del report["jobs"][key]
+            report["state"] = "partial"
         if calls_this_run >= max_calls:
             break
         original = judge.complete

@@ -25,12 +25,17 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
 from dotenv import load_dotenv
 
 from .judges import ROLES, load_roles
 from . import panel_config
+from . import benchmark
+from .benchmark_cases import load_cases
+from .benchmark_score import score
 from .panel import Panel
 from .protocol import HumanReview, Producer, ReviewRequest, Verdict
 
@@ -240,6 +245,61 @@ def cmd_schema(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_benchmark(args: argparse.Namespace) -> int:
+    if args.retry_errors and not args.resume:
+        print("Benchmark configuration error: --retry-errors requires --resume.", file=sys.stderr)
+        return 5
+    try:
+        cases, pack_hash = load_cases(args.cases)
+        candidates = benchmark.prepare(cases, args.panel)
+        if args.max_calls <= 0:
+            raise ValueError("--max-calls must be positive.")
+        report_path = args.resume or (
+            Path(".agentjury") / "benchmarks" /
+            f"{datetime.now(timezone.utc):%Y%m%d-%H%M%S}-{uuid4().hex[:8]}.json"
+        )
+        if not args.json:
+            print(f"Preflight: {len(cases)} cases, {len(candidates)} candidate panels, "
+                  f"{benchmark.distinct_jobs(cases, candidates)} distinct jobs, "
+                  f"maximum attempts {benchmark.maximum_attempts(cases, candidates)}, "
+                  f"call cap {args.max_calls}, report {report_path}")
+        report = benchmark.run(
+            cases, pack_hash, candidates, report_path=report_path,
+            max_calls=args.max_calls, resume=bool(args.resume), retry_errors=args.retry_errors,
+            progress=None if args.json else print,
+            on_snapshot=lambda snapshot: score(snapshot, cases, candidates),
+        )
+    except (ValueError, OSError) as exc:
+        message = str(exc)
+        if not (message.startswith("Invalid case file") or message.startswith("Panel contains a duplicate")
+                or message.startswith("--max-calls") or message.startswith("Invalid resume")):
+            message = "Invalid benchmark configuration or report."
+        print(message, file=sys.stderr)
+        return 5
+
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        for spec, rows in report["outcomes"].items():
+            print(f"\nPanel {spec}")
+            for row in rows:
+                print(f"  {row['case_id']} ({row['label']}): {row['status']}")
+            totals = report["summary"][spec]
+            print(f"  unsafe approvals {totals['unsafe_approvals']}/{totals['unsafe_denominator']}; "
+                  f"missed blocks {totals['missed_blocks']}/{totals['injected_total']}; "
+                  f"false rejections {totals['false_rejections']}/{totals['correct_total']}; "
+                  f"unavailable {totals['unavailable']}/{totals['total']}; "
+                  f"actionable {totals['actionable']}/{totals['total']}")
+        if report["recommendation"]:
+            print("\nProvisional panel suggestion from these cases:")
+            for spec in report["recommendation"]["panels"]:
+                print(f"  --panel {spec}")
+        else:
+            print(f"\nNo panel recommendation: {report['recommendation_reason']}")
+        print(f"Report saved: {report_path}")
+    return 0 if report["state"] == "complete" else 4
+
+
 def main(argv: list[str] | None = None) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(errors="backslashreplace")
@@ -289,6 +349,17 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("schema", help="Print the JSON schema for the protocol objects.")
     s.add_argument("object", choices=["request", "verdict"], nargs="?", default="verdict")
     s.set_defaults(func=cmd_schema)
+
+    b = sub.add_parser("benchmark", help="Compare explicit panels on labeled cases.")
+    b.add_argument("--cases", type=Path, help="UTF-8 JSON case file (default: built-in starter cases).")
+    b.add_argument("--panel", action="append", required=True,
+                   help="Candidate panel in the same syntax as review; repeat to compare.")
+    b.add_argument("--max-calls", type=int, default=20,
+                   help="Maximum provider completion attempts in this run (default: 20).")
+    b.add_argument("--resume", type=Path, help="Continue a saved benchmark report.")
+    b.add_argument("--retry-errors", action="store_true", help="Retry failed jobs while retaining successes.")
+    b.add_argument("--json", action="store_true", help="Print the saved report as JSON only.")
+    b.set_defaults(func=cmd_benchmark)
 
     args = parser.parse_args(argv)
     return args.func(args)

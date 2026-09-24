@@ -19,7 +19,7 @@ class StubJudge(Judge):
     def complete(self, system, user):
         self.calls += 1
         reply = self.replies.pop(0) if self.replies else '{"vote":"approve","score":9,"reason":"fine","findings":[]}'
-        if isinstance(reply, Exception):
+        if isinstance(reply, BaseException):
             raise reply
         return Completion(reply)
 
@@ -119,3 +119,37 @@ def test_report_redacts_echoed_case_and_configured_secret(tmp_path, monkeypatch)
     assert "Calculate 2 + 2" not in saved
     assert "dummy-secret-123" not in saved
     assert "https://private.invalid/v1" not in saved
+
+
+def test_default_endpoint_url_is_redacted_from_model_reason(tmp_path):
+    reason = "Reviewer quoted https://openrouter.ai/api/v1"
+    judge = StubJudge(replies=[json.dumps({"vote": "approve", "score": 9, "reason": reason, "findings": []})])
+    path = tmp_path / "x.json"
+    run([_case()], "pack", [_candidate([judge])], report_path=path)
+    assert "https://openrouter.ai/api/v1" not in path.read_text()
+
+
+def test_sanitized_compatible_error_preserves_http_status(tmp_path):
+    judge = StubJudge(replies=[RuntimeError("openrouter model x: RateLimitError, HTTP 429") for _ in range(2)])
+    result = run([_case()], "pack", [_candidate([judge])], report_path=tmp_path / "x.json")
+    assert result["jobs"][job_key(_case(), judge)]["error"] == "RuntimeError HTTP 429"
+
+
+def test_duplicate_panel_specs_are_rejected_before_calls(monkeypatch):
+    monkeypatch.setattr("agentjury.benchmark.build_panel", lambda spec: Panel([StubJudge()]))
+    with pytest.raises(ValueError, match="duplicate panel"):
+        prepare([_case()], ["same", "same"])
+
+
+def test_interrupted_retry_keeps_checkpoint_partial(tmp_path):
+    judge = StubJudge(replies=[RuntimeError("first"), RuntimeError("second")])
+    candidate = _candidate([judge])
+    path = tmp_path / "x.json"
+    run([_case()], "pack", [candidate], report_path=path)
+    judge.replies = [KeyboardInterrupt()]
+    with pytest.raises(KeyboardInterrupt):
+        run([_case()], "pack", [candidate], report_path=path, resume=True, retry_errors=True)
+    saved = json.loads(path.read_text())
+    assert saved["state"] == "partial"
+    assert saved["jobs"] == {}
+    assert saved["calls_total"] == 3
