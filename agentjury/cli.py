@@ -29,18 +29,13 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from .judges import ROLES, anthropic_judge, load_roles, openai_judge
-from .judges.base import Judge
+from .judges import ROLES, load_roles
+from . import panel_config
 from .panel import Panel
 from .protocol import HumanReview, Producer, ReviewRequest, Verdict
 
 DEFAULT_PANEL = "accuracy:openai,critic:anthropic,executive:openai"
 VERDICT_DIR = Path(".agentjury") / "verdicts"
-
-PROVIDERS = {
-    "openai": openai_judge,
-    "anthropic": anthropic_judge,
-}
 
 SEVERITY_MARK = {"minor": "-", "major": "!", "blocking": "X"}
 
@@ -50,21 +45,10 @@ EXIT = {"verified": 0, "needs_revision": 1, "blocked": 2, "insufficient_jury": 3
 
 
 def build_panel(spec: str, quorum: int | None = None) -> Panel:
-    judges: list[Judge] = []
-    for item in spec.split(","):
-        item = item.strip()
-        if not item:
-            continue
-        try:
-            role, provider = item.split(":")
-        except ValueError:
-            sys.exit(f"Bad panel entry {item!r}. Use role:provider, e.g. critic:anthropic")
-        if role not in ROLES:
-            sys.exit(f"Unknown role {role!r}. Known roles: {', '.join(sorted(ROLES))}")
-        if provider not in PROVIDERS:
-            sys.exit(f"Unknown provider {provider!r}. Known providers: {', '.join(PROVIDERS)}")
-        judges.append(PROVIDERS[provider](role))
-    return Panel(judges, quorum=quorum)
+    try:
+        return panel_config.build_panel(spec, quorum=quorum)
+    except ValueError as exc:
+        sys.exit(str(exc))
 
 
 def read(path: str) -> str:
