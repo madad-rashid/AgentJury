@@ -266,7 +266,7 @@ def test_review_carries_ids_params_and_telemetry():
     r = v.reviews[0]
     assert len(r.review_id) == 12 and r.request_id == REQ.request_id and r.panel_id == v.panel_id
     assert r.role == "critic" and r.provider == "fake" and r.model == "fake-1"
-    assert r.rubric_version == "0.3" and len(r.prompt_hash) == 12
+    assert r.rubric_version == "0.4" and len(r.prompt_hash) == 12
     assert r.params["timeout"] == 5.0
     assert r.latency_ms is not None and r.tokens_in == 100 and r.tokens_out == 50
     assert r.findings[0].adjudication is None and r.human_review is None
