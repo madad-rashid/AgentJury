@@ -42,6 +42,18 @@ ROLES: dict[str, str] = {
         "have a source, a calculation, or a stated assumption behind it. Flag anything "
         "presented as fact without support."
     ),
+    "source_audit": (
+        "You are the citation gate. First check whether the TASK explicitly "
+        "requires a source. If it does, a time-sensitive number used to meet "
+        "that requirement must identify a publication or document and the "
+        "number's as-of date. A bare organisation name or the word 'today' "
+        "does not meet that requirement. If those details are absent, vote "
+        "revise and give a blocking finding because the task's requested "
+        "source is not traceable. Do this even when the named organisation "
+        "is reputable or the rest of the explanation sounds plausible. Do "
+        "not infer missing citation details. Do not require dated citations "
+        "for timeless calculations."
+    ),
     "executive": (
         "You represent the person who asked for this. Is it useful, concise, "
         "actionable, and ready to use without further work? Penalise padding, "

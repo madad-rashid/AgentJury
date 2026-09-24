@@ -64,6 +64,10 @@ agentjury review task.md output.md \
 ```
 
 Run `agentjury roles` to see the built-in roles. Every verdict is saved to `.agentjury/verdicts/`.
+For tasks that explicitly request a source for a time-sensitive number, the
+`source_audit` role checks for a named publication or document and an as-of
+date. Add it to an explicit panel when citation traceability matters. A model
+may still miss a problem, so compare candidate panels on your own labeled cases.
 
 ### One key or a local model
 
