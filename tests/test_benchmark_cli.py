@@ -107,3 +107,43 @@ def test_cli_retry_errors_reuses_successful_jobs(fake_panels, capsys):
     assert main(["benchmark", "--panel", "demo", "--resume", str(report_path), "--retry-errors"]) == 0
     assert sum(j.calls for j in fake_panels) == before + 1
     assert all("review" in item for item in json.loads(report_path.read_text())["jobs"].values())
+
+
+@pytest.mark.parametrize("factory_error", [ImportError("missing SDK"), RuntimeError("missing key")])
+def test_panel_setup_errors_return_configuration_code(tmp_path, monkeypatch, capsys, factory_error):
+    monkeypatch.chdir(tmp_path)
+
+    def broken_panel(spec):
+        raise factory_error
+
+    monkeypatch.setattr(benchmark, "build_panel", broken_panel)
+    assert main(["benchmark", "--panel", "accuracy:openai"]) == 5
+    captured = capsys.readouterr()
+    assert "configuration" in captured.err.lower()
+    assert "Traceback" not in captured.err
+    assert not (tmp_path / ".agentjury").exists()
+
+
+def test_human_summary_shows_completion_and_median_latency(fake_panels, capsys):
+    assert main(["benchmark", "--panel", "demo"]) == 0
+    output = capsys.readouterr().out
+    assert "completed 6/6" in output
+    assert "median judge latency" in output
+
+
+def test_equal_panels_are_labeled_as_tied(fake_panels, monkeypatch, capsys):
+    import agentjury.cli as cli
+    real_score = cli.score
+
+    def tied_score(report, cases, candidates):
+        report = real_score(report, cases, candidates)
+        if report["state"] == "complete":
+            report["recommendation"] = {"provisional": True, "panels": ["panel-a", "panel-b"]}
+        return report
+
+    monkeypatch.setattr(cli, "score", tied_score)
+    assert main(["benchmark", "--panel", "panel-a", "--panel", "panel-b"]) == 0
+    output = capsys.readouterr().out
+    assert "Tied provisional" in output
+    assert "--panel panel-a" in output
+    assert "--panel panel-b" in output

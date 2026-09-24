@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Callable
 
 from .benchmark_cases import BenchmarkCase, case_hash, case_request
-from .judges.base import CompletionBudgetExhausted, Judge
+from .judges.base import CompletionBudgetExhausted, CompletionCheckpointFailed, Judge
 from .judges.compatible import OLLAMA_URL, OPENROUTER_URL
 from .panel import Panel
 from .panel_config import build_panel
@@ -42,7 +42,14 @@ def prepare(cases: list[BenchmarkCase], specs: list[str]) -> list[Candidate]:
         raise ValueError("Benchmark needs cases and at least one panel.")
     if len(specs) != len(set(specs)):
         raise ValueError("Benchmark contains a duplicate panel spec.")
-    candidates = [Candidate(spec, build_panel(spec)) for spec in specs]
+    candidates = []
+    for spec in specs:
+        try:
+            candidates.append(Candidate(spec, build_panel(spec)))
+        except ValueError:
+            raise
+        except Exception as exc:
+            raise ValueError(f"Panel setup failed ({type(exc).__name__}).") from None
     for candidate in candidates:
         _check_candidate(candidate)
     return candidates
@@ -105,20 +112,19 @@ def _redact_review(review: Review, case: BenchmarkCase) -> dict:
         "AGENTJURY_COMPATIBLE_API_KEY", "AGENTJURY_COMPATIBLE_BASE_URL",
         "AGENTJURY_OLLAMA_BASE_URL",
     )]
-    needles = sorted((needle for needle in needles if len(needle) >= 6), key=len, reverse=True)
+    needles = sorted((needle for needle in needles if needle), key=len, reverse=True)
 
-    def clean(value):
-        if isinstance(value, str):
-            for needle in needles:
-                value = value.replace(needle, "[redacted]")
-            return value
-        if isinstance(value, list):
-            return [clean(item) for item in value]
-        if isinstance(value, dict):
-            return {key: clean(item) for key, item in value.items()}
+    def clean_text(value: str) -> str:
+        for needle in needles:
+            value = value.replace(needle, "[redacted]")
         return value
 
-    return clean(review.model_dump(mode="json"))
+    data = review.model_dump(mode="json")
+    data["reason"] = clean_text(data["reason"])
+    for finding in data["findings"]:
+        finding["text"] = clean_text(finding["text"])
+    Review.model_validate(data)
+    return data
 
 
 def _save(path: Path, report: dict, on_snapshot: Callable[[dict], dict] | None) -> dict:
@@ -199,7 +205,12 @@ def run(
                 raise CompletionBudgetExhausted()
             calls_this_run += 1
             report["calls_total"] += 1
-            report = _save(report_path, report, on_snapshot)
+            try:
+                report = _save(report_path, report, on_snapshot)
+            except OSError:
+                calls_this_run -= 1
+                report["calls_total"] -= 1
+                raise CompletionCheckpointFailed("checkpoint unavailable") from None
             return original(system, user)
 
         judge.complete = budgeted
@@ -210,6 +221,8 @@ def run(
                 progress(f"{len(report['jobs'])}/{len(jobs)} {judge.name}: review saved")
         except CompletionBudgetExhausted:
             break
+        except CompletionCheckpointFailed:
+            raise
         except Exception as exc:
             error = _safe_error(exc)
             report["jobs"][key] = {"error": error, "completed_at": _now()}

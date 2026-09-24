@@ -187,6 +187,10 @@ class CompletionBudgetExhausted(Exception):
     """A caller-enforced budget stopped a completion before it was sent."""
 
 
+class CompletionCheckpointFailed(OSError):
+    """A caller could not save progress before sending a completion."""
+
+
 class Judge(ABC):
     """One reviewer: a role plus a model that plays it.
 
@@ -226,6 +230,8 @@ class Judge(ABC):
             try:
                 return self.complete(system, user)
             except CompletionBudgetExhausted:
+                raise
+            except CompletionCheckpointFailed:
                 raise
             except Exception as exc:  # noqa: BLE001 - provider errors are heterogeneous
                 last = exc

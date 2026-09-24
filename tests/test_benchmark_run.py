@@ -6,6 +6,7 @@ from agentjury.benchmark import Candidate, job_key, prepare, run
 from agentjury.benchmark_cases import BenchmarkCase
 from agentjury.judges.base import Completion, Judge
 from agentjury.panel import Panel
+from agentjury.protocol import Review
 
 
 class StubJudge(Judge):
@@ -153,3 +154,49 @@ def test_interrupted_retry_keeps_checkpoint_partial(tmp_path):
     assert saved["state"] == "partial"
     assert saved["jobs"] == {}
     assert saved["calls_total"] == 3
+
+
+@pytest.mark.parametrize("output,findings", [
+    ("approve", []),
+    ("blocking", [{"text": "issue", "severity": "blocking"}]),
+    ("12345", []),
+])
+def test_redaction_preserves_structural_review_fields(tmp_path, output, findings):
+    case = _case(output=output)
+    reason = f"The answer was {output}"
+    judge = StubJudge(replies=[json.dumps({"vote": "approve", "score": 9, "reason": reason, "findings": findings})])
+    report = run([case], "pack", [_candidate([judge])], report_path=tmp_path / "x.json")
+    saved_review = report["jobs"][job_key(case, judge)]["review"]
+    review = Review.model_validate(saved_review)
+    assert review.vote == "approve"
+    assert output not in review.reason
+    assert saved_review["config_id"] == judge.config_id
+    if findings:
+        assert review.findings[0].severity == "blocking"
+
+
+def test_short_context_is_redacted_from_free_text(tmp_path):
+    case = BenchmarkCase(id="x", task="Count letters", output="five", context="abc", label="correct")
+    judge = StubJudge(replies=[json.dumps({"vote": "approve", "score": 9, "reason": "abc is useful", "findings": []})])
+    report = run([case], "pack", [_candidate([judge])], report_path=tmp_path / "x.json")
+    review = report["jobs"][job_key(case, judge)]["review"]
+    assert "abc" not in review["reason"]
+
+
+def test_checkpoint_write_failure_is_not_counted_as_provider_call(tmp_path, monkeypatch):
+    import agentjury.benchmark as benchmark_module
+    original_save = benchmark_module._save
+    writes = 0
+
+    def fail_once(path, report, callback):
+        nonlocal writes
+        writes += 1
+        if writes == 1:
+            raise OSError("checkpoint unavailable")
+        return original_save(path, report, callback)
+
+    monkeypatch.setattr(benchmark_module, "_save", fail_once)
+    judge = StubJudge()
+    with pytest.raises(OSError, match="checkpoint"):
+        run([_case()], "pack", [_candidate([judge])], report_path=tmp_path / "x.json")
+    assert judge.calls == 0

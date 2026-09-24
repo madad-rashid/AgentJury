@@ -285,13 +285,19 @@ def cmd_benchmark(args: argparse.Namespace) -> int:
             for row in rows:
                 print(f"  {row['case_id']} ({row['label']}): {row['status']}")
             totals = report["summary"][spec]
+            latency = totals["median_latency_ms"]
+            latency_text = "n/a" if latency is None else f"{latency:g} ms"
             print(f"  unsafe approvals {totals['unsafe_approvals']}/{totals['unsafe_denominator']}; "
                   f"missed blocks {totals['missed_blocks']}/{totals['injected_total']}; "
                   f"false rejections {totals['false_rejections']}/{totals['correct_total']}; "
                   f"unavailable {totals['unavailable']}/{totals['total']}; "
-                  f"actionable {totals['actionable']}/{totals['total']}")
+                  f"completed {totals['completed']}/{totals['total']}; "
+                  f"actionable {totals['actionable']}/{totals['total']}; "
+                  f"median judge latency {latency_text}")
         if report["recommendation"]:
-            print("\nProvisional panel suggestion from these cases:")
+            tied = len(report["recommendation"]["panels"]) > 1
+            print("\nTied provisional panel suggestions from these cases:"
+                  if tied else "\nProvisional panel suggestion from these cases:")
             for spec in report["recommendation"]["panels"]:
                 print(f"  --panel {spec}")
         else:
