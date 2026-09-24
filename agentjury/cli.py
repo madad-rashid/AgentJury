@@ -241,6 +241,8 @@ def cmd_schema(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="backslashreplace")
     load_dotenv()
     parser = argparse.ArgumentParser(prog="agentjury", description="Peer review for AI agent output.")
     sub = parser.add_subparsers(dest="command", required=True)
