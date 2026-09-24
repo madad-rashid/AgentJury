@@ -72,7 +72,7 @@ The key stays in the user's environment or ignored `.env` file. No benchmark cas
 - `agentjury/benchmark.py`: case loading, distinct-job execution, call budget, persistence, and resume validation.
 - `agentjury/benchmark_score.py`: replay of recorded reviews through the existing aggregator, metric counts, eligibility, and ordering.
 - `agentjury/cli.py`: `benchmark` command, readable output, and JSON output; keep its parsing and orchestration thin.
-- `benchmarks/starter.json`: built-in labeled cases, versioned with the repository.
+- `agentjury/data/starter.json` and `pyproject.toml`: built-in labeled cases packaged with installed AgentJury.
 - `README.md` and `CONTRIBUTING.md`: usage, case-file format, free-call limits, privacy, and the provisional meaning of a recommendation.
 - `tests/`: offline fake-judge coverage for labels, provider independence, overlapping-panel call reuse, actual-call cap, partial save/resume, retry-errors, scoring priority, no-recommendation cases, secret-safe reports, and unchanged ordinary review behavior.
 
