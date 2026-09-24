@@ -10,6 +10,8 @@ from agentjury.protocol import Review
 
 
 class StubJudge(Judge):
+    requires_evidence = False
+
     def __init__(self, role="accuracy", model="one:free", provider="vendor", replies=None):
         super().__init__(role, model)
         self.provider = provider
@@ -25,12 +27,56 @@ class StubJudge(Judge):
         return Completion(reply)
 
 
+class GuardedJudge(StubJudge):
+    requires_evidence = True
+
+
 def _case(id="a", output="4"):
     return BenchmarkCase(id=id, task="Calculate 2 + 2", output=output, label="correct")
 
 
 def _candidate(judges, spec="panel"):
     return Candidate(spec, Panel(judges))
+
+
+def test_benchmark_report_omits_checked_excerpts(tmp_path):
+    case = BenchmarkCase(
+        id="price", task="Check the price", output="Wrong secret-output-marker price",
+        context="Correct secret-context-marker price", label="flawed",
+    )
+    reply = json.dumps({
+        "vote": "revise", "score": 3, "reason": "Check the price.",
+        "findings": [{
+            "text": "The price is wrong.", "severity": "major",
+            "evidence": {
+                "output_quote": "secret-output-marker",
+                "basis_source": "context",
+                "basis_quote": "secret-context-marker",
+            },
+        }],
+    })
+    judge = GuardedJudge(replies=[reply])
+    report = run([case], "pack", [_candidate([judge])], report_path=tmp_path / "report.json")
+    saved = report["jobs"][job_key(case, judge)]["review"]
+    assert saved["findings"][0]["text"] == "The price is wrong."
+    assert saved["findings"][0]["evidence"] is None
+    assert "secret-output-marker" not in json.dumps(saved)
+    assert "secret-context-marker" not in json.dumps(saved)
+
+
+def test_invalid_evidence_is_sanitized_and_uses_existing_repair_budget(tmp_path):
+    bad = json.dumps({
+        "vote": "revise", "score": 3, "reason": "secret-reason-marker",
+        "findings": [{"text": "secret-finding-marker", "severity": "major"}],
+    })
+    judge = GuardedJudge(replies=[bad, bad])
+    case = _case()
+    report = run([case], "pack", [_candidate([judge])], report_path=tmp_path / "report.json")
+    saved = report["jobs"][job_key(case, judge)]
+    assert "review" not in saved
+    assert saved["error"] == "ValueError"
+    assert report["calls_total"] == 2
+    assert "secret-" not in json.dumps(report)
 
 
 def test_shared_judge_called_once_and_role_changes_job(tmp_path):

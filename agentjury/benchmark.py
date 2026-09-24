@@ -123,6 +123,7 @@ def _redact_review(review: Review, case: BenchmarkCase) -> dict:
     data["reason"] = clean_text(data["reason"])
     for finding in data["findings"]:
         finding["text"] = clean_text(finding["text"])
+        finding["evidence"] = None
     Review.model_validate(data)
     return data
 

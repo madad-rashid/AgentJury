@@ -83,7 +83,8 @@ def print_verdict(verdict: Verdict) -> None:
         meta = f"{r.latency_ms / 1000:.1f}s" if r.latency_ms is not None else ""
         print(f"{arrow} {r.score:>2.0f}  {r.judge:<22} {r.reason}  [{meta}]")
         for f in r.findings:
-            print(f"        {SEVERITY_MARK[f.severity]} {f.text}")
+            checked = " [excerpts checked]" if f.evidence is not None else ""
+            print(f"        {SEVERITY_MARK[f.severity]} {f.text}{checked}")
     for e in verdict.errors:
         print(f"!  {e}")
 

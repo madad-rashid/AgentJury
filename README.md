@@ -64,6 +64,13 @@ agentjury review task.md output.md \
 ```
 
 Run `agentjury roles` to see the built-in roles. Every verdict is saved to `.agentjury/verdicts/`.
+Findings must cite short, exact excerpts from the task, context, output, or
+reviewer rule. AgentJury checks that each excerpt appears in that source. If
+a reviewer cannot supply valid excerpts after one repair attempt, its review
+is unavailable and the jury may report `insufficient_jury`. The display marks
+accepted findings `[excerpts checked]`; saved verdicts retain the excerpts
+locally. This check does not prove that a finding interprets an excerpt
+correctly, and reviewers cannot open links in the supplied text.
 For tasks that explicitly request a source for a time-sensitive number, the
 `source_audit` role checks for a named publication or document and an as-of
 date. Add it to an explicit panel when citation traceability matters. A model
@@ -167,8 +174,9 @@ argument for you to choose; normal reviews never switch panels automatically.
 
 Your case text goes to the model services you select. Reports stay local and
 ignored by Git; they include model-generated review reasons and findings but
-omit the original case text and configured keys. A model behind an unchanged
-slug can change over time, so compare report timestamps when repeating a run.
+omit the original case text, checked excerpts, and configured keys. A model
+behind an unchanged slug can change over time, so compare report timestamps
+when repeating a run.
 
 ## Architecture
 
