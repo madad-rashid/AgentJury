@@ -36,6 +36,13 @@ def _base_url(value: str) -> str:
     return url
 
 
+def _same_base_url(left: str, right: str) -> bool:
+    try:
+        return _base_url(left) == _base_url(right)
+    except ValueError:
+        return False
+
+
 class CompatibleJudge(Judge):
     """One reviewer routed through an OpenAI-compatible chat endpoint."""
 
@@ -100,6 +107,8 @@ def openrouter_judge(role: str, model: str) -> CompatibleJudge:
     if not key:
         raise ValueError("Set OPENROUTER_API_KEY to use OpenRouter judges.")
     vendor = model.split("/", 1)[0].lower()
+    if vendor == "openrouter":
+        raise ValueError("OpenRouter model must use a stable vendor/model slug.")
     return CompatibleJudge(
         role, model, route="openrouter", base_url=OPENROUTER_URL,
         api_key=key, provider=vendor,
@@ -118,7 +127,9 @@ def compatible_judge(role: str, model: str) -> CompatibleJudge:
     url = os.environ.get("AGENTJURY_COMPATIBLE_BASE_URL", "").strip()
     if not url:
         raise ValueError("Set AGENTJURY_COMPATIBLE_BASE_URL to use compatible judges.")
+    ollama_url = os.environ.get("AGENTJURY_OLLAMA_BASE_URL") or OLLAMA_URL
+    provider = "ollama" if _same_base_url(url, ollama_url) else "compatible"
     return CompatibleJudge(
         role, model, route="compatible", base_url=url,
-        api_key=os.environ.get("AGENTJURY_COMPATIBLE_API_KEY"), provider="compatible",
+        api_key=os.environ.get("AGENTJURY_COMPATIBLE_API_KEY"), provider=provider,
     )

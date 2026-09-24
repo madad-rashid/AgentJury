@@ -115,13 +115,42 @@ def test_custom_endpoint_requires_url(monkeypatch, fake_openai):
         compatible_judge("accuracy", "local-model")
 
 
-@pytest.mark.parametrize("model", ["~openai/gpt-latest", "auto", "/gpt-4o", "openai/"])
+@pytest.mark.parametrize("model", [
+    "~openai/gpt-latest", "auto", "/gpt-4o", "openai/",
+    "openrouter/auto", "openrouter/free", "openrouter/pareto-code",
+])
 def test_openrouter_rejects_ambiguous_model(monkeypatch, fake_openai, model):
     from agentjury.judges import openrouter_judge
 
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-router-key")
     with pytest.raises(ValueError, match="vendor/model"):
         openrouter_judge("accuracy", model)
+
+
+def test_same_ollama_endpoint_cannot_count_as_two_providers(monkeypatch, fake_openai):
+    from agentjury.judges import compatible_judge, ollama_judge
+    from agentjury.judges.compatible import OLLAMA_URL
+    from agentjury.judges import FakeJudge
+
+    monkeypatch.setenv("AGENTJURY_OLLAMA_BASE_URL", OLLAMA_URL)
+    monkeypatch.setenv("AGENTJURY_COMPATIBLE_BASE_URL", OLLAMA_URL + "/")
+    verdict = Panel([
+        ollama_judge("accuracy", "qwen3:8b"),
+        compatible_judge("critic", "qwen3:8b"),
+        FakeJudge("executive", provider="anthropic", fail_times=2),
+    ]).review(ReviewRequest(task="Check", output="Answer"))
+
+    assert [review.params["route"] for review in verdict.reviews] == ["ollama", "compatible"]
+    assert [review.provider for review in verdict.reviews] == ["ollama", "ollama"]
+    assert verdict.status == "insufficient_jury"
+
+
+def test_custom_endpoint_ignores_unselected_ollama_config(monkeypatch, fake_openai):
+    from agentjury.judges import compatible_judge
+
+    monkeypatch.setenv("AGENTJURY_COMPATIBLE_BASE_URL", "http://localhost:1234/v1")
+    monkeypatch.setenv("AGENTJURY_OLLAMA_BASE_URL", "invalid-url")
+    assert compatible_judge("accuracy", "local-model").provider == "compatible"
 
 
 def test_endpoint_changes_configuration_identity(monkeypatch, fake_openai):

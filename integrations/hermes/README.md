@@ -76,7 +76,9 @@ OpenAI-compatible endpoint, set `AGENTJURY_COMPATIBLE_BASE_URL`, optionally
 set `AGENTJURY_COMPATIBLE_API_KEY`, and use `accuracy:compatible:local-model`.
 OpenRouter and custom endpoints receive the task and agent output. The model
 vendor in an OpenRouter slug determines provider diversity. Ollama judges
-share one provider identity, and custom-endpoint judges share another.
+share one provider identity, and custom-endpoint judges share another. If the
+custom endpoint URL matches the configured Ollama URL, both routes count as
+Ollama.
 
 ## Use
 

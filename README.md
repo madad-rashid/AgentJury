@@ -78,9 +78,9 @@ agentjury review task.md output.md --panel 'accuracy:openrouter:openai/gpt-4o,cr
 ```
 
 Choose model slugs currently supported by OpenRouter. Use a stable
-`vendor/model` slug; dynamic aliases are rejected because AgentJury uses the
-vendor prefix for the provider-diversity rule. These examples send the task and
-agent output to OpenRouter.
+`vendor/model` slug; dynamic aliases such as `openrouter/auto` are rejected
+because AgentJury uses the vendor prefix for the provider-diversity rule.
+These examples send the task and agent output to OpenRouter.
 
 With [Ollama](https://ollama.com/) running locally and `qwen3:8b` installed,
 no API key is needed:
@@ -103,9 +103,10 @@ agentjury review task.md output.md --panel 'accuracy:compatible:local-model'
 
 Set `AGENTJURY_COMPATIBLE_API_KEY` if the endpoint requires one. AgentJury sends
 the task and output to that endpoint, which may be remote if you configure a
-remote URL. All custom-endpoint judges count as one provider. Panel entries use
-`role:provider:model` for these routes; the existing `role:openai` and
-`role:anthropic` forms remain valid.
+remote URL. All custom-endpoint judges count as one provider. If the custom
+endpoint URL matches the configured Ollama URL, both routes count as Ollama.
+Panel entries use `role:provider:model` for these routes; the existing
+`role:openai` and `role:anthropic` forms remain valid.
 
 ## Architecture
 

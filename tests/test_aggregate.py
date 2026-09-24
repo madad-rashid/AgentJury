@@ -1,5 +1,8 @@
 """Tests for the aggregator and panel. No API keys needed: uses FakeJudge."""
 
+import sys
+import types
+
 import pytest
 
 from agentjury import Panel, ReviewRequest, aggregate
@@ -169,6 +172,11 @@ def test_direct_and_routed_openai_are_one_provider(monkeypatch):
     """OpenRouter routing does not create an independent OpenAI vote."""
     from agentjury.judges import openai_judge, openrouter_judge
 
+    class Client:
+        def __init__(self, **kwargs):
+            pass
+
+    monkeypatch.setitem(sys.modules, "openai", types.SimpleNamespace(OpenAI=Client))
     monkeypatch.setenv("OPENAI_API_KEY", "test-openai")
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-router")
     direct = openai_judge("accuracy")

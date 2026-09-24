@@ -28,7 +28,7 @@ accuracy:ollama:qwen3:8b,critic:ollama:qwen3:8b
 accuracy:compatible:<model>
 ```
 
-OpenRouter uses `OPENROUTER_API_KEY` and `https://openrouter.ai/api/v1`. Missing keys fail during panel construction with a clear instruction. OpenRouter model names must have a nonempty `vendor/model` form: the vendor contains only letters, digits, dots, underscores, or hyphens and starts with a letter or digit. Dynamic aliases such as `~openai/...` and names without a vendor are rejected because they cannot establish a stable model-provider identity for the jury rule.
+OpenRouter uses `OPENROUTER_API_KEY` and `https://openrouter.ai/api/v1`. Missing keys fail during panel construction with a clear instruction. OpenRouter model names must have a nonempty `vendor/model` form: the vendor contains only letters, digits, dots, underscores, or hyphens and starts with a letter or digit. Dynamic aliases such as `~openai/...`, the `openrouter/*` router namespace, and names without a vendor are rejected because they cannot establish a stable model-provider identity for the jury rule.
 
 Ollama uses `AGENTJURY_OLLAMA_BASE_URL`, defaulting to `http://127.0.0.1:11434/v1`, and needs no user-supplied key. The SDK may receive an internal placeholder key, which is never exposed in a verdict. The custom endpoint requires `AGENTJURY_COMPATIBLE_BASE_URL` and accepts an optional `AGENTJURY_COMPATIBLE_API_KEY`. No endpoint or key is inferred from OpenAI's environment variables. Configured endpoint URLs must be absolute HTTP(S) URLs without embedded credentials, query strings, or fragments.
 
@@ -36,7 +36,7 @@ The CLI and Hermes both call a shared panel parser and judge factory. Their diff
 
 ## Identity, diversity, and saved data
 
-`Review.model` stores the exact requested model. OpenRouter derives `Review.provider` from the explicit vendor prefix, so `openai/...` and `anthropic/...` count as two model providers, while two `openai/...` models count as one. A direct OpenAI judge and an OpenRouter-routed `openai/...` judge also count as one provider for diversity. Ollama and the custom endpoint each report one stable provider identity regardless of model name; merely changing local model names does not create multi-provider independence.
+`Review.model` stores the exact requested model. OpenRouter derives `Review.provider` from the explicit vendor prefix, so `openai/...` and `anthropic/...` count as two model providers, while two `openai/...` models count as one. A direct OpenAI judge and an OpenRouter-routed `openai/...` judge also count as one provider for diversity. Ollama and the custom endpoint each report one stable provider identity regardless of model name; merely changing local model names does not create multi-provider independence. When the custom endpoint URL matches the configured Ollama URL after normalization, both routes report `ollama` as their provider while retaining distinct route metadata.
 
 The route name (`openrouter`, `ollama`, or `compatible`) and a SHA-256 fingerprint of the normalized base URL are recorded in `Review.params` and therefore affect `config_id`. API keys and raw endpoint URLs are not stored. New-route judge names use `role/route/model` so two entries with the same role and underlying provider remain distinguishable. Panel output remains in configured order even when judges finish in a different order.
 
