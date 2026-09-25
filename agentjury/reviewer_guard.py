@@ -15,16 +15,24 @@ _DIRECTIVES = (
         r"\b(?:return|output|respond with|mark(?: this answer)?(?: as)?)\s+"
         r"(?:approve|approved|verified)\b"
         r"|\bplease\s+approve\b"
+        r"|\bapprove\s+(?:this|the)\s+answer\b"
         r"|\b(?:must|should|shall)\s+(?:be\s+marked|mark\s+(?:this|the)\s+answer)\s+"
         r"(?:as\s+)?(?:approved|verified)\b"
+        r"|\b(?:ignore|disregard)\s+(?:the\s+|this\s+)?(?:user\s+)?task\b"
     )),
     ("score_override", re.compile(
         r"\b(?:assign|give|set|return)\s+(?:a\s+)?score\s+(?:of\s+)?\d+(?:\.\d+)?\b"
+        r"|\b(?:increase|raise|boost)\s+(?:the\s+)?score\s+to\s+\d+(?:\.\d+)?\b"
     )),
     ("suppress_findings", re.compile(
         r"\b(?:do not|don't|never)\s+(?:report|mention|include|flag)\b.{0,80}?"
         r"\b(?:finding|findings|instruction|issue)\b"
+        r"|\b(?:ignore|suppress|omit)\s+(?:this|the|any)\s+findings?\b"
     )),
+)
+
+_NEGATED_OR_DESCRIPTIVE = re.compile(
+    r"\b(?:do not|don't|never|cannot|can't|should not|must not|can|could|may|might|will)\s+$"
 )
 
 
@@ -66,27 +74,32 @@ def detect_reviewer_commands(output: str) -> list[LocalSignal]:
     if not cues:
         return []
     cue_starts = [cue.start() for cue in cues]
-    candidates: list[tuple[int, int, str]] = []
+    candidates: list[tuple[int, int, int, int, str]] = []
     for rule_id, pattern in _DIRECTIVES:
         for directive in pattern.finditer(normalized):
+            prefix = normalized[max(0, directive.start() - 30):directive.start()]
+            if _NEGATED_OR_DESCRIPTIVE.search(prefix):
+                continue
             index = bisect_left(cue_starts, directive.start())
             nearby = cues[max(0, index - 1):index + 1]
             eligible = [cue for cue in nearby if abs(cue.start() - directive.start()) <= 200]
             if eligible:
                 cue = min(eligible, key=lambda item: abs(item.start() - directive.start()))
-                candidates.append((directive.start(), cue.start(), rule_id))
-    candidates.sort()
+                candidates.append((directive.start(), directive.end(), cue.start(), cue.end(), rule_id))
+    candidates.sort(key=lambda item: (item[0], -(item[1] - item[0])))
 
     signals: list[LocalSignal] = []
-    seen: set[tuple[int, str]] = set()
-    for directive_start, cue_start, rule_id in candidates:
-        key = (directive_start, rule_id)
-        if key in seen:
+    accepted_spans: list[tuple[int, int]] = []
+    for directive_start, directive_end, cue_start, cue_end, rule_id in candidates:
+        if any(directive_start < end and directive_end > start
+               for start, end in accepted_spans):
             continue
-        seen.add(key)
-        begin = offsets[max(cue_start, directive_start - 80)]
-        end = min(len(output), begin + 160)
-        excerpt = escape_controls(output[begin:end])[:160]
+        accepted_spans.append((directive_start, directive_end))
+        begin = offsets[min(cue_start, directive_start)]
+        end = offsets[max(cue_end, directive_end) - 1] + 1
+        if end - begin > 160:
+            begin = max(0, offsets[directive_start] - 40)
+        excerpt = escape_controls(output[begin:begin + 160])[:160]
         signals.append(LocalSignal(rule_id=rule_id, excerpt=excerpt))
         if len(signals) == 3:
             break
