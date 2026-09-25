@@ -46,7 +46,7 @@ def prepare(cases: list[BenchmarkCase], specs: list[str]) -> list[Candidate]:
     for spec in specs:
         try:
             candidates.append(Candidate(spec, build_panel(spec)))
-        except ValueError:
+        except (ValueError, ImportError):
             raise
         except Exception as exc:
             raise ValueError(f"Panel setup failed ({type(exc).__name__}).") from None
@@ -193,11 +193,11 @@ def run(
         old = report["jobs"].get(key)
         if old and ("review" in old or not retry_errors):
             continue
+        if calls_this_run >= max_calls:
+            break
         if old:
             del report["jobs"][key]
             report["state"] = "partial"
-        if calls_this_run >= max_calls:
-            break
         original = judge.complete
 
         def budgeted(system: str, user: str):

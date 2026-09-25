@@ -64,8 +64,9 @@ agentjury review task.md output.md \
 ```
 
 Run `agentjury roles` to see the built-in roles. Every verdict is saved to `.agentjury/verdicts/`.
-Findings must cite short, exact excerpts from the task, context, output, or
-reviewer rule. AgentJury checks that each excerpt appears in that source. If
+Findings must cite short excerpts from the task, context, output, or
+reviewer rule. AgentJury checks each excerpt against that source, allowing
+only whitespace, common quote and dash, and Unicode NFKC differences. If
 a reviewer cannot supply valid excerpts after one repair attempt, its review
 is unavailable and the jury may report `insufficient_jury`. The display marks
 accepted findings `[excerpts checked]`; saved verdicts retain the excerpts
@@ -142,6 +143,12 @@ invocation. If the cap stops a run, continue using its printed report path:
 ```powershell
 agentjury benchmark --panel 'accuracy:openrouter:nvidia/nemotron-3.5-lightning:free,critic:openrouter:cohere/north-mini-code:free' --panel 'accuracy:openrouter:nvidia/nemotron-3.5-lightning:free,critic:openrouter:nex-agi/nex-n2.5-mini:free' --resume .agentjury/benchmarks/REPORT.json --max-calls 20
 ```
+
+If the cap is reached between a judge's first response and its retry or
+repair, that unfinished job remains pending and starts over on resume.
+Attempts already made still count in the report's `calls_total`. Start with a
+small cap when testing a service's free allowance, then inspect the report
+before resuming.
 
 Use the same case file and panels on resume. Successful judge responses are
 reused; recorded errors are retained. Add `--retry-errors` to retry failed

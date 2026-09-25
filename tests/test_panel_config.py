@@ -42,14 +42,20 @@ def test_explicit_direct_and_router_models(fake_factories):
     ]
 
 
+def test_trailing_comma_keeps_one_judge(fake_factories):
+    panel = build_panel("accuracy:openai,")
+    assert len(panel.judges) == 1
+    assert fake_factories == [("accuracy", "openai", None)]
+
+
 @pytest.mark.parametrize("spec", [
     "accuracy:ollama",
     "accuracy:openrouter:",
     "accuracy:compatible",
     "accuracy:unknown:x",
     "accuracy",
+    "",
     ",",
-    "accuracy:openai,",
     "unknown:openai",
 ])
 def test_invalid_panel_has_clear_error(spec, fake_factories):

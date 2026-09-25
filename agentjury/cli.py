@@ -54,6 +54,10 @@ def build_panel(spec: str, quorum: int | None = None) -> Panel:
         return panel_config.build_panel(spec, quorum=quorum)
     except ValueError as exc:
         sys.exit(str(exc))
+    except ImportError as exc:
+        message = str(exc)
+        sys.exit(message if "package is not installed. Run: pip install" in message
+                 else "Could not load panel dependency.")
 
 
 def read(path: str) -> str:
@@ -252,7 +256,15 @@ def cmd_benchmark(args: argparse.Namespace) -> int:
         return 5
     try:
         cases, pack_hash = load_cases(args.cases)
-        candidates = benchmark.prepare(cases, args.panel)
+        try:
+            candidates = benchmark.prepare(cases, args.panel)
+        except (ValueError, ImportError) as exc:
+            message = str(exc)
+            if (message.startswith("Panel setup failed (")
+                    or isinstance(exc, ImportError) and "package is not installed. Run: pip install" not in message):
+                message = "Invalid benchmark configuration or report."
+            print(message, file=sys.stderr)
+            return 5
         if args.max_calls <= 0:
             raise ValueError("--max-calls must be positive.")
         report_path = args.resume or (
@@ -362,7 +374,8 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("--panel", action="append", required=True,
                    help="Candidate panel in the same syntax as review; repeat to compare.")
     b.add_argument("--max-calls", type=int, default=20,
-                   help="Maximum provider completion attempts in this run (default: 20).")
+                   help="Maximum provider completion attempts this run (default: 20); "
+                        "an unfinished job may repeat on resume.")
     b.add_argument("--resume", type=Path, help="Continue a saved benchmark report.")
     b.add_argument("--retry-errors", action="store_true", help="Retry failed jobs while retaining successes.")
     b.add_argument("--json", action="store_true", help="Print the saved report as JSON only.")

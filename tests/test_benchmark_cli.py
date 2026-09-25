@@ -1,4 +1,5 @@
 import json
+import sys
 
 import pytest
 
@@ -32,7 +33,9 @@ def test_benchmark_help(capsys):
     with pytest.raises(SystemExit) as exc:
         main(["benchmark", "--help"])
     assert exc.value.code == 0
-    assert "--max-calls" in capsys.readouterr().out
+    help_text = capsys.readouterr().out
+    assert "--max-calls" in help_text
+    assert "unfinished job" in help_text
 
 
 def test_benchmark_requires_explicit_panel():
@@ -67,6 +70,36 @@ def test_invalid_dataset_stops_before_calls(fake_panels, tmp_path, capsys):
     assert main(["benchmark", "--cases", str(bad), "--panel", "demo"]) == 5
     assert sum(j.calls for j in fake_panels) == 0
     assert "case file" in capsys.readouterr().err
+
+
+def test_benchmark_explains_missing_openrouter_key(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("agentjury.cli.load_dotenv", lambda: False)
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    assert main(["benchmark", "--panel", "accuracy:openrouter:vendor/model"]) == 5
+    assert "Set OPENROUTER_API_KEY" in capsys.readouterr().err
+
+
+def test_benchmark_explains_unknown_role(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    assert main(["benchmark", "--panel", "critc:ollama:qwen3:8b"]) == 5
+    assert "Unknown role" in capsys.readouterr().err
+
+
+def test_review_explains_missing_openai_package(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setitem(sys.modules, "openai", None)
+    (tmp_path / "task.txt").write_text("Check this", encoding="utf-8")
+    (tmp_path / "output.txt").write_text("Answer", encoding="utf-8")
+    with pytest.raises(SystemExit, match=r'pip install "agentjury\[openai\]"'):
+        main(["review", "task.txt", "output.txt", "--panel", "accuracy:ollama:local"])
+
+
+def test_benchmark_explains_missing_openai_package(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setitem(sys.modules, "openai", None)
+    assert main(["benchmark", "--panel", "accuracy:ollama:local"]) == 5
+    assert 'pip install "agentjury[openai]"' in capsys.readouterr().err
 
 
 def test_duplicate_config_stops_before_calls(fake_panels, monkeypatch, capsys):

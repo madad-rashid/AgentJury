@@ -124,6 +124,9 @@ two different parts of AGENT OUTPUT. Do not invent or paraphrase excerpts. If
 you cannot point to evidence for a problem, omit the finding. A "revise" vote
 requires at least one finding. These excerpts show where a claim came from;
 they do not by themselves prove that your interpretation is correct.
+Keep each excerpt within 240 characters after whitespace normalization.
+Checking tolerates only collapsed whitespace, curly versus straight quotes,
+en/em dashes versus hyphens, and Unicode NFKC differences.
 
 Respond with ONLY a JSON object, no prose before or after, in exactly this shape:
 {{
@@ -206,7 +209,8 @@ class Completion:
 REPAIR_TEMPLATE = (
     "Your previous reply had invalid JSON or unsupported finding evidence. "
     "Reply again with ONLY the JSON object described in your instructions. "
-    "Every finding needs exact output and basis excerpts. No prose or code fences."
+    "Every finding needs output and basis excerpts of at most 240 characters "
+    "after whitespace normalization. No prose or code fences."
 )
 
 

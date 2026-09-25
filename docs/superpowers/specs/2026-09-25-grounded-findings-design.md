@@ -28,13 +28,13 @@ Every new finding returned by a judge includes its existing text and severity pl
 }
 ```
 
-`output_quote` is a short exact substring of the agent output. `basis_source` is `task`, `context`, `output`, or `reviewer_rule`. For `task`, `context`, and `output`, `basis_quote` is a short exact substring of that named section. `output` as a basis is for contradictions within the answer and needs a distinct quote. `reviewer_rule` is for attempts to manipulate the judge; its basis quote must match the fixed reviewer-manipulation rule in the system prompt. Task omissions can cite the task requirement and a representative part of the answer. Arithmetic errors can cite the operands in the task and the reported result in the output; this gate checks the excerpts' presence, not the arithmetic.
+`output_quote` is a short excerpt of the agent output. `basis_source` is `task`, `context`, `output`, or `reviewer_rule`. For `task`, `context`, and `output`, `basis_quote` must match that named section after the limited normalization described below. `output` as a basis is for contradictions within the answer and needs a distinct quote. `reviewer_rule` is for attempts to manipulate the judge; its basis quote must match the fixed reviewer-manipulation rule in the system prompt. Task omissions can cite the task requirement and a representative part of the answer. Arithmetic errors can cite the operands in the task and the reported result in the output; this gate checks the excerpts' presence, not the arithmetic.
 
 The prompt says that a URL in the agent output is not fetched by the judge. A model may only allege disagreement with a source when the relevant source text is supplied in the task or context. Recommendations clearly framed as opinions should not be reported as false measured claims. Judges should omit a finding they cannot ground in the material they actually received.
 
 ## Validation and failure behavior
 
-`Judge.review` validates evidence after parsing the JSON and before creating a `Review`. Both quotes must be nonempty, bounded in length, and literal substrings of their declared sections, except that `reviewer_rule` uses the fixed rule text. The `context` source is invalid when no context was supplied. A `revise` vote needs at least one validated finding. A model response that violates the evidence contract uses the existing one repair round-trip with a short format correction. If the second response is still invalid, that judge fails; the panel's existing quorum and provider-floor rules decide whether a verdict is available. The failed response and its unsupported claims are not shown as findings.
+`Judge.review` validates evidence after parsing the JSON and before creating a `Review`. Both quotes must be nonempty, at most 240 characters after normalization, and substrings of their declared sections after the same normalization, except that `reviewer_rule` uses the fixed rule text. The `context` source is invalid when no context was supplied. A `revise` vote needs at least one validated finding. A model response that violates the evidence contract uses the existing one repair round-trip with a short format correction. If the second response is still invalid, that judge fails; the panel's existing quorum and provider-floor rules decide whether a verdict is available. The failed response and its unsupported claims are not shown as findings.
 
 The program must not silently delete individual findings and retain the model's vote, because that vote may depend on the deleted criticism. For accepted reviews, the user-facing reason is a neutral summary of the vote and finding count, rather than the model's unvalidated free-text reason. Findings remain attributed to the reviewer and are described as excerpt-checked allegations, not established facts. Human finding adjudication remains available.
 
@@ -53,3 +53,13 @@ Offline tests cover literal match and mismatch for each evidence source, absent 
 Run the full test suite and package build. Then run the local good/wrong-price pair and at least one injected starter case. The live acceptance check inspects both case status and individual finding wording. A weak model may become unavailable; the required safety result is that an unsupported finding does not enter an accepted review. The benchmark continues to report unavailability separately from false approvals and false rejections.
 
 This design checks that excerpts exist, not that the alleged contradiction is logically valid. Later human adjudications and multi-provider benchmark runs remain necessary to measure that remaining error.
+
+## Approved follow-up: limited excerpt normalization
+
+After code review, the user approved accepting excerpts that differ only in
+collapsed whitespace, curly versus straight quotation marks, en/em dashes
+versus hyphens, or Unicode NFKC form. Validation applies the same
+normalization to each quote and its named source before substring matching.
+The 240-character limit applies after normalization, and two quotes from the
+output must still be distinct after normalization. Invented or paraphrased
+text remains invalid. The neutral user-facing reason remains required.

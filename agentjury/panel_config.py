@@ -25,6 +25,8 @@ def build_panel(spec: str, quorum: int | None = None) -> Panel:
     judges = []
     for raw in spec.split(","):
         item = raw.strip()
+        if not item:
+            continue
         fields = [part.strip() for part in item.split(":", 2)]
         if len(fields) not in (2, 3) or not all(fields):
             raise ValueError(f"Bad panel entry {item!r}. Use role:provider[:model].")

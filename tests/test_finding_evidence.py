@@ -50,14 +50,56 @@ def test_context_source_requires_context():
         validate_evidence(Vote.REVISE, [sample_evidence()], sample_request(context=None))
 
 
-def test_unicode_lookalike_does_not_match():
-    request = sample_request(context="DeepSeek’s output is $1.20.")
+def test_collapsed_whitespace_matches_received_output():
+    request = ReviewRequest(task="List colors.", output="- Red\n- Blue", context="List Red and Blue.")
+    evidence = FindingEvidence(
+        output_quote="- Red - Blue", basis_source="context", basis_quote="List Red and Blue."
+    )
+    validate_evidence(Vote.REVISE, [evidence], request)
+
+
+def test_curly_quotes_dash_and_nfkc_variants_match():
+    request = ReviewRequest(task="Check price.", output="“Price” — ＄１.２０", context="Price is $1.20.")
+    evidence = FindingEvidence(
+        output_quote='"Price" - $1.20', basis_source="context", basis_quote="Price is $1.20."
+    )
+    validate_evidence(Vote.REVISE, [evidence], request)
+
+
+def test_overlong_received_quote_fails_after_normalization():
+    long_text = "x" * 241
+    request = ReviewRequest(task="Check this.", output=long_text, context="The output is too long.")
+    evidence = FindingEvidence(
+        output_quote=long_text, basis_source="context", basis_quote="The output is too long."
+    )
     with pytest.raises(ValueError, match="evidence"):
-        validate_evidence(
-            Vote.REVISE,
-            [sample_evidence(basis_quote="DeepSeek's output is $1.20.")],
-            request,
-        )
+        validate_evidence(Vote.REVISE, [evidence], request)
+
+
+def test_quote_length_uses_normalized_text():
+    request = ReviewRequest(task="Check this.", output="a" + " " * 400 + "b", context="Expected a b.")
+    evidence = FindingEvidence(
+        output_quote="a" + " " * 400 + "b", basis_source="context", basis_quote="Expected a b."
+    )
+    validate_evidence(Vote.REVISE, [evidence], request)
+
+
+def test_output_basis_must_differ_after_normalization():
+    request = ReviewRequest(task="Check this.", output='“Price” and "Price"')
+    evidence = FindingEvidence(
+        output_quote="“Price”", basis_source="output", basis_quote='"Price"'
+    )
+    with pytest.raises(ValueError, match="evidence"):
+        validate_evidence(Vote.REVISE, [evidence], request)
+
+
+def test_curly_apostrophe_variant_matches():
+    request = sample_request(context="DeepSeek’s output is $1.20.")
+    validate_evidence(
+        Vote.REVISE,
+        [sample_evidence(basis_quote="DeepSeek's output is $1.20.")],
+        request,
+    )
 
 
 def test_output_url_cannot_be_claimed_as_context_evidence():

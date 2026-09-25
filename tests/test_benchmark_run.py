@@ -134,6 +134,24 @@ def test_failure_is_safe_and_only_retried_when_requested(tmp_path):
     assert judge.calls == 3
 
 
+def test_retry_errors_keeps_unattempted_error_when_budget_ends(tmp_path):
+    first = StubJudge(role="accuracy", replies=[RuntimeError("first failure")])
+    second = StubJudge(role="critic", replies=[RuntimeError("second failure")])
+    first.retries = second.retries = 0
+    case = _case()
+    candidate = _candidate([first, second])
+    path = tmp_path / "run.json"
+    original = run([case], "pack", [candidate], report_path=path)
+    assert all("error" in item for item in original["jobs"].values())
+
+    resumed = run([case], "pack", [candidate], report_path=path,
+                  resume=True, retry_errors=True, max_calls=1)
+    assert "review" in resumed["jobs"][job_key(case, first)]
+    assert resumed["jobs"][job_key(case, second)]["error"] == "RuntimeError"
+    assert resumed["calls_total"] == 3
+    assert second.calls == 1
+
+
 @pytest.mark.parametrize("changed", ["pack hash", "content", "panel"])
 def test_resume_rejects_changed_input(tmp_path, changed):
     judge = StubJudge()
