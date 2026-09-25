@@ -179,6 +179,13 @@ class Review(BaseModel):
         return self
 
 
+class LocalSignal(BaseModel):
+    """A deterministic warning about instructions aimed at jury reviewers."""
+
+    rule_id: Literal["force_approval", "score_override", "suppress_findings"]
+    excerpt: str
+
+
 class Verdict(BaseModel):
     """The aggregate of all Reviews for one ReviewRequest."""
 
