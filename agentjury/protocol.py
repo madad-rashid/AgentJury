@@ -22,7 +22,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
-SCHEMA_VERSION = "0.5"
+SCHEMA_VERSION = "0.6"
 
 
 def _now() -> datetime:
@@ -226,6 +226,14 @@ class Verdict(BaseModel):
         )
     )
     reviews: list[Review]
+    local_signals: list[LocalSignal] = Field(
+        default_factory=list,
+        description="Deterministic warnings found in the submitted answer; not judge findings or votes.",
+    )
+    local_guard_applied: bool = Field(
+        default=False,
+        description="True only when a local warning changed verified to needs_revision.",
+    )
     errors: list[str] = Field(
         default_factory=list, description="Judges that failed to return a review, with the reason."
     )

@@ -29,7 +29,8 @@ Reviewer reputation will later weight these votes. For now every voter counts on
 
 from __future__ import annotations
 
-from .protocol import Review, ReviewRequest, Verdict, Vote
+from .protocol import LocalSignal, Review, ReviewRequest, Verdict, Vote
+from .reviewer_guard import detect_reviewer_commands
 
 
 def default_quorum(requested: int) -> int:
@@ -37,13 +38,15 @@ def default_quorum(requested: int) -> int:
     return max(1, requested // 2 + 1)
 
 
-def _empty(request: ReviewRequest, reviews, errors, requested, quorum, panel_id) -> Verdict:
+def _empty(request: ReviewRequest, reviews, errors, requested, quorum, panel_id,
+           local_signals: list[LocalSignal]) -> Verdict:
     return Verdict(
         request_id=request.request_id, panel_id=panel_id,
         requested=requested, responded=len(reviews), abstained=len(reviews), quorum=quorum,
         task_type=request.task_type, domain=request.domain, producer=request.producer,
         up=0, down=0, score=0.0, consensus=0.0, diversity=0.0, confidence=0.0,
         status="insufficient_jury", reviews=reviews, errors=errors or [],
+        local_signals=local_signals,
     )
 
 
@@ -59,11 +62,12 @@ def aggregate(
 ) -> Verdict:
     requested = requested if requested is not None else len(reviews)
     quorum = quorum if quorum is not None else default_quorum(requested)
+    local_signals = detect_reviewer_commands(request.output)
 
     voters = [r for r in reviews if r.vote != Vote.ABSTAIN]
     abstained = len(reviews) - len(voters)
     if not voters:
-        return _empty(request, reviews, errors, requested, quorum, panel_id)
+        return _empty(request, reviews, errors, requested, quorum, panel_id, local_signals)
 
     n = len(voters)
     up = sum(1 for r in voters if r.vote == Vote.APPROVE)
@@ -98,6 +102,10 @@ def aggregate(
     else:
         status = "verified"
 
+    local_guard_applied = status == "verified" and bool(local_signals)
+    if local_guard_applied:
+        status = "needs_revision"
+
     return Verdict(
         request_id=request.request_id,
         panel_id=panel_id,
@@ -116,5 +124,7 @@ def aggregate(
         confidence=confidence,
         status=status,
         reviews=reviews,
+        local_signals=local_signals,
+        local_guard_applied=local_guard_applied,
         errors=errors or [],
     )

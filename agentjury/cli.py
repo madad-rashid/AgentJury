@@ -74,6 +74,8 @@ def save(verdict: Verdict) -> Path:
 
 
 def print_verdict(verdict: Verdict) -> None:
+    from .reviewer_guard import escape_controls
+
     print(verdict.render())
     print(f"jury confidence index {verdict.confidence:.0%}  (heuristic, not a probability)")
     if verdict.status == "insufficient_jury":
@@ -81,6 +83,13 @@ def print_verdict(verdict: Verdict) -> None:
         providers = len({r.provider for r in verdict.reviews if r.vote != "abstain"})
         print(f"Insufficient jury: {voters} of {verdict.requested} judges voted (quorum {verdict.quorum}), "
               f"from {providers} provider(s). No verdict.")
+    if verdict.local_signals:
+        if verdict.local_guard_applied:
+            print("Local check changed verified to needs_revision: reviewer-directed instruction detected.")
+        else:
+            print("Local check detected a reviewer-directed instruction; status unchanged.")
+        for signal in verdict.local_signals:
+            print(f"  ! {signal.rule_id}: {escape_controls(signal.excerpt)}")
     print()
     for r in verdict.reviews:
         arrow = {"approve": "▲", "revise": "▼", "abstain": "–"}[r.vote]
