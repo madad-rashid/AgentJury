@@ -6,7 +6,7 @@ import pytest
 
 from agentjury import ReviewRequest
 from agentjury.judges import ROLES, FakeJudge, load_roles, register_roles
-from agentjury.judges.base import build_system_prompt, build_user_prompt
+from agentjury.judges.base import REPAIR_TEMPLATE, build_system_prompt, build_user_prompt
 
 
 def test_output_is_delimited_as_untrusted():
@@ -51,3 +51,10 @@ def test_unknown_role_still_rejected():
 def test_system_prompt_explains_abstain():
     p = build_system_prompt("accuracy")
     assert '"abstain"' in p and "not counted as approval" in p
+
+
+def test_prompt_explains_excerpt_length_and_normalization():
+    prompt = build_system_prompt("accuracy")
+    assert "240" in prompt
+    assert "NFKC" in prompt
+    assert "240" in REPAIR_TEMPLATE

@@ -4,9 +4,9 @@ The AgentJury protocol. Schema version is SCHEMA_VERSION below.
     ReviewRequest  ->  [Judge, Judge, Judge]  ->  [Review, Review, Review]  ->  Verdict
 
 Every field that reputation will later need is captured from the first review:
-who produced the output, who judged it, with which prompt, at what cost, and
-a slot for a human to adjudicate each finding. Reputation weighting is not
-active yet; the data for it is.
+who produced the output, who judged it, through which route, with which prompt,
+at what cost, and a slot for a human to adjudicate each finding. Reputation
+weighting is not active yet; the data for it is.
 
 Any agent framework that can produce a ReviewRequest can use AgentJury.
 """
@@ -94,6 +94,14 @@ Severity = Literal["minor", "major", "blocking"]
 Adjudication = Literal["correct", "partially_correct", "wrong"]
 
 
+class FindingEvidence(BaseModel):
+    """Short excerpts used to check the provenance of a judge's finding."""
+
+    output_quote: str
+    basis_source: Literal["task", "context", "output", "reviewer_rule"]
+    basis_quote: str
+
+
 class Finding(BaseModel):
     """One specific problem a judge raised. Adjudicated individually by a human,
     so a review with five findings and one mistake keeps credit for four."""
@@ -101,6 +109,7 @@ class Finding(BaseModel):
     id: str = Field(default_factory=lambda: uuid4().hex[:8])
     text: str
     severity: Severity = "minor"
+    evidence: FindingEvidence | None = None
     adjudication: Adjudication | None = Field(
         default=None, description="Set by a human later. None means not yet reviewed."
     )
@@ -128,7 +137,10 @@ class Review(BaseModel):
     )
     judge: str = Field(description="Display name, e.g. 'critic/anthropic'.")
     role: str = Field(description="Judge role, e.g. 'critic'.")
-    provider: str = Field(description="e.g. 'openai', 'anthropic', 'fake'.")
+    provider: str = Field(description=(
+        "Underlying model vendor when known, e.g. 'openai' or 'anthropic'. "
+        "Ollama and custom compatible endpoints each count as one provider."
+    ))
     model: str = Field(description="Underlying model that produced this review.")
 
     vote: Vote
@@ -148,7 +160,10 @@ class Review(BaseModel):
     prompt_hash: str = Field(description="Hash of the exact system prompt sent to the judge.")
     params: dict[str, Any] = Field(
         default_factory=dict,
-        description="Model parameters that affect behaviour: effort, thinking, max_tokens, temperature...",
+        description=(
+            "Model parameters and non-secret route identity that affect behaviour: "
+            "effort, thinking, max_tokens, route, endpoint_hash..."
+        ),
     )
     latency_ms: int | None = None
     tokens_in: int | None = None

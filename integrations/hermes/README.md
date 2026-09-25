@@ -55,6 +55,31 @@ plugins:
         feedback: true
 ```
 
+The `panel` setting also accepts explicit `role:provider:model` entries.
+For an OpenRouter-only panel, install the current AgentJury repository checkout
+into Hermes's Python environment, set `OPENROUTER_API_KEY` in Hermes's `.env`,
+and use:
+
+```yaml
+panel: "accuracy:openrouter:openai/gpt-4o,critic:openrouter:anthropic/claude-sonnet-4"
+```
+
+For a local Ollama server with `qwen3:8b` installed, use:
+
+```yaml
+panel: "accuracy:ollama:qwen3:8b,critic:ollama:qwen3:8b"
+```
+
+Ollama defaults to `http://127.0.0.1:11434/v1`; set
+`AGENTJURY_OLLAMA_BASE_URL` in Hermes's environment to change it. For another
+OpenAI-compatible endpoint, set `AGENTJURY_COMPATIBLE_BASE_URL`, optionally
+set `AGENTJURY_COMPATIBLE_API_KEY`, and use `accuracy:compatible:local-model`.
+OpenRouter and custom endpoints receive the task and agent output. The model
+vendor in an OpenRouter slug determines provider diversity. Ollama judges
+share one provider identity, and custom-endpoint judges share another. If the
+custom endpoint URL matches the configured Ollama URL, both routes count as
+Ollama.
+
 ## Use
 
 Type `/jury` in any session to see the latest verdict, or `/jury <request_id>`

@@ -34,6 +34,33 @@ python -m pytest tests -q
 
 The normal test suite should not require live model calls.
 
+## Benchmark cases and reports
+
+`agentjury benchmark --panel SPEC` uses the packaged
+`agentjury/data/starter.json` by default. Use `--cases FILE` for your own UTF-8
+JSON pack with `schema_version: "1"`, unique case IDs, nonempty `task` and
+`output`, optional `context`, and a `correct`, `flawed`, or `injected` label.
+The file supplies the expected category; the benchmark cannot infer the
+truth of arbitrary claims. A useful recommendation pack needs at least two
+unambiguous cases in each category, including non-arithmetic constraints and
+different prompt-injection wording.
+
+The runner sends each distinct case/judge configuration once and replays
+recorded reviews through the same aggregator as `review`. Keep the 20-call
+default budget and resume behavior in mind when adding tests. Offline tests
+should use fake judges and cover a cap reached during retry or JSON repair,
+partial reports, recorded failures, and `--retry-errors`. Never make live
+provider calls part of the normal suite.
+
+Reports are saved under `.agentjury/benchmarks/`, which Git ignores. They
+include model-generated reasons and findings; do not share them without
+checking their contents. A case file goes to the selected model services.
+The automatic suggestion is provisional: it needs a complete balanced pack,
+two underlying providers, zero unsafe approvals, and at least 80% actionable
+verdicts. It does not alter the default `review` panel. Free eligibility
+requires explicit OpenRouter `:free` slugs or Ollama models. Run
+`agentjury benchmark --help` for cap, resume, retry, and JSON options.
+
 ## Live adversarial test
 
 The live adversarial test sends an injected output to configured providers. It costs API tokens and is disabled by default.
@@ -58,6 +85,15 @@ To add a provider:
 6. Record model parameters that materially affect judging behavior in `self.params`.
 7. Disable hidden SDK retries where practical so AgentJury's retry policy stays observable.
 8. Add unit tests for success, provider failure, malformed output, retry, and telemetry.
+
+OpenRouter, Ollama, and other OpenAI-compatible chat services share
+`agentjury/judges/compatible.py`; extend its route configuration when an
+endpoint follows the same request and response shape. Panel syntax and judge
+construction live in `agentjury/panel_config.py`, which is shared by the CLI
+and Hermes. Add a separate adapter only when a provider needs a different API.
+Never put a raw endpoint URL or API key in `Review.params` or `config_id`.
+For routed models, preserve the underlying model vendor as `Review.provider`
+when it can be identified; local and custom endpoints count as one provider.
 
 Provider adapters must not expose other reviewers' votes to the model. Blind review is a core protocol property.
 

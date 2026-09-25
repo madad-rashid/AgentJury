@@ -1,10 +1,13 @@
 """Tests for the aggregator and panel. No API keys needed: uses FakeJudge."""
 
+import sys
+import types
+
 import pytest
 
 from agentjury import Panel, ReviewRequest, aggregate
 from agentjury.aggregate import default_quorum
-from agentjury.judges import FakeJudge
+from agentjury.judges import Completion, FakeJudge
 
 REQ = ReviewRequest(task="Write a haiku about rain.", output="Rain taps the window...")
 BLOCK = [{"text": "Fabricated source", "severity": "blocking"}]
@@ -165,6 +168,49 @@ def test_single_provider_panel_is_not_penalised_for_being_single():
     assert v.status == "verified"
 
 
+def test_direct_and_routed_openai_are_one_provider(monkeypatch):
+    """OpenRouter routing does not create an independent OpenAI vote."""
+    from agentjury.judges import openai_judge, openrouter_judge
+
+    class Client:
+        def __init__(self, **kwargs):
+            pass
+
+    monkeypatch.setitem(sys.modules, "openai", types.SimpleNamespace(OpenAI=Client))
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai")
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-router")
+    direct = openai_judge("accuracy")
+    routed = openrouter_judge("critic", "openai/gpt-4o")
+    other = openrouter_judge("executive", "anthropic/claude-sonnet-4")
+    opinion = '{"vote":"approve","score":9,"reason":"Correct.","findings":[]}'
+    monkeypatch.setattr(direct, "complete", lambda system, user: Completion(opinion))
+    monkeypatch.setattr(routed, "complete", lambda system, user: Completion(opinion))
+    monkeypatch.setattr(other, "complete", lambda system, user: (_ for _ in ()).throw(ConnectionError("offline")))
+
+    lost_diversity = Panel([direct, routed, other]).review(REQ)
+    assert [r.provider for r in lost_diversity.reviews] == ["openai", "openai"]
+    assert lost_diversity.up == 2
+    assert lost_diversity.status == "insufficient_jury"
+
+    monkeypatch.setattr(other, "complete", lambda system, user: Completion(opinion))
+    diverse = Panel([direct, other]).review(REQ)
+    assert diverse.status == "verified"
+    assert {r.provider for r in diverse.reviews} == {"openai", "anthropic"}
+
+
+def test_duplicate_judge_names_keep_configured_order():
+    class TrackedJudge(FakeJudge):
+        def review(self, request):
+            result = super().review(request)
+            self.saved_id = result.review_id
+            return result
+
+    slow = TrackedJudge("accuracy", provider="ollama", delay=0.05)
+    fast = TrackedJudge("accuracy", provider="ollama")
+    verdict = Panel([slow, fast]).review(REQ)
+    assert [r.review_id for r in verdict.reviews] == [slow.saved_id, fast.saved_id]
+
+
 # --- retry and repair ------------------------------------------------------
 
 def test_transient_failure_is_retried():
@@ -220,7 +266,7 @@ def test_review_carries_ids_params_and_telemetry():
     r = v.reviews[0]
     assert len(r.review_id) == 12 and r.request_id == REQ.request_id and r.panel_id == v.panel_id
     assert r.role == "critic" and r.provider == "fake" and r.model == "fake-1"
-    assert r.rubric_version == "0.3" and len(r.prompt_hash) == 12
+    assert r.rubric_version == "0.4" and len(r.prompt_hash) == 12
     assert r.params["timeout"] == 5.0
     assert r.latency_ms is not None and r.tokens_in == 100 and r.tokens_out == 50
     assert r.findings[0].adjudication is None and r.human_review is None

@@ -23,7 +23,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from agentjury import Artifact, Panel, Producer, ReviewRequest, Verdict
-from agentjury.judges import ROLES, anthropic_judge, load_roles, openai_judge
+from agentjury import panel_config
+from agentjury.judges import load_roles
 
 log = logging.getLogger("agentjury.hermes")
 
@@ -31,7 +32,6 @@ WRITE_TOOLS = {"write_file", "patch", "file_edit", "edit_file", "create_file", "
 PATH_KEYS = ("path", "file_path", "filename", "file", "target")
 MAX_ARTIFACTS = 5
 MAX_ARTIFACT_CHARS = 20_000
-PROVIDERS = {"openai": openai_judge, "anthropic": anthropic_judge}
 
 
 @dataclass
@@ -75,16 +75,7 @@ def infer_provider(model: str | None) -> str | None:
 def build_panel(settings: Settings) -> Panel:
     if settings.roles_file:
         load_roles(settings.roles_file)
-    judges = []
-    for item in settings.panel.split(","):
-        item = item.strip()
-        if not item:
-            continue
-        role, provider = item.split(":")
-        if role not in ROLES:
-            raise ValueError(f"Unknown role {role!r}")
-        judges.append(PROVIDERS[provider](role))
-    return Panel(judges, quorum=settings.quorum or None)
+    return panel_config.build_panel(settings.panel, quorum=settings.quorum or None)
 
 
 def read_artifact(path: str) -> Artifact | None:

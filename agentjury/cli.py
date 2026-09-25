@@ -13,8 +13,8 @@ Verdicts are read from --dir, else $AGENTJURY_VERDICT_DIR, else .agentjury/verdi
 Exit codes: 0 verified, 1 needs_revision, 2 blocked, 3 insufficient_jury.
 
 TASK and OUTPUT are files (or "-" to read OUTPUT from stdin).
-PANEL is a comma-separated list of role:provider pairs, for example
-    accuracy:openai,critic:anthropic,executive:openai
+PANEL is a comma-separated list of role:provider[:model] entries, for example
+    accuracy:openai,critic:openrouter:anthropic/claude-sonnet-4
 Every verdict is saved to .agentjury/verdicts/<request_id>.json so that
 reviews accumulate over time.
 """
@@ -25,22 +25,22 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
 from dotenv import load_dotenv
 
-from .judges import ROLES, anthropic_judge, load_roles, openai_judge
-from .judges.base import Judge
+from .judges import ROLES, load_roles
+from . import panel_config
+from . import benchmark
+from .benchmark_cases import load_cases
+from .benchmark_score import score
 from .panel import Panel
 from .protocol import HumanReview, Producer, ReviewRequest, Verdict
 
 DEFAULT_PANEL = "accuracy:openai,critic:anthropic,executive:openai"
 VERDICT_DIR = Path(".agentjury") / "verdicts"
-
-PROVIDERS = {
-    "openai": openai_judge,
-    "anthropic": anthropic_judge,
-}
 
 SEVERITY_MARK = {"minor": "-", "major": "!", "blocking": "X"}
 
@@ -50,21 +50,14 @@ EXIT = {"verified": 0, "needs_revision": 1, "blocked": 2, "insufficient_jury": 3
 
 
 def build_panel(spec: str, quorum: int | None = None) -> Panel:
-    judges: list[Judge] = []
-    for item in spec.split(","):
-        item = item.strip()
-        if not item:
-            continue
-        try:
-            role, provider = item.split(":")
-        except ValueError:
-            sys.exit(f"Bad panel entry {item!r}. Use role:provider, e.g. critic:anthropic")
-        if role not in ROLES:
-            sys.exit(f"Unknown role {role!r}. Known roles: {', '.join(sorted(ROLES))}")
-        if provider not in PROVIDERS:
-            sys.exit(f"Unknown provider {provider!r}. Known providers: {', '.join(PROVIDERS)}")
-        judges.append(PROVIDERS[provider](role))
-    return Panel(judges, quorum=quorum)
+    try:
+        return panel_config.build_panel(spec, quorum=quorum)
+    except ValueError as exc:
+        sys.exit(str(exc))
+    except ImportError as exc:
+        message = str(exc)
+        sys.exit(message if "package is not installed. Run: pip install" in message
+                 else "Could not load panel dependency.")
 
 
 def read(path: str) -> str:
@@ -94,7 +87,8 @@ def print_verdict(verdict: Verdict) -> None:
         meta = f"{r.latency_ms / 1000:.1f}s" if r.latency_ms is not None else ""
         print(f"{arrow} {r.score:>2.0f}  {r.judge:<22} {r.reason}  [{meta}]")
         for f in r.findings:
-            print(f"        {SEVERITY_MARK[f.severity]} {f.text}")
+            checked = " [excerpts checked]" if f.evidence is not None else ""
+            print(f"        {SEVERITY_MARK[f.severity]} {f.text}{checked}")
     for e in verdict.errors:
         print(f"!  {e}")
 
@@ -256,7 +250,78 @@ def cmd_schema(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_benchmark(args: argparse.Namespace) -> int:
+    if args.retry_errors and not args.resume:
+        print("Benchmark configuration error: --retry-errors requires --resume.", file=sys.stderr)
+        return 5
+    try:
+        cases, pack_hash = load_cases(args.cases)
+        try:
+            candidates = benchmark.prepare(cases, args.panel)
+        except (ValueError, ImportError) as exc:
+            message = str(exc)
+            if (message.startswith("Panel setup failed (")
+                    or isinstance(exc, ImportError) and "package is not installed. Run: pip install" not in message):
+                message = "Invalid benchmark configuration or report."
+            print(message, file=sys.stderr)
+            return 5
+        if args.max_calls <= 0:
+            raise ValueError("--max-calls must be positive.")
+        report_path = args.resume or (
+            Path(".agentjury") / "benchmarks" /
+            f"{datetime.now(timezone.utc):%Y%m%d-%H%M%S}-{uuid4().hex[:8]}.json"
+        )
+        if not args.json:
+            print(f"Preflight: {len(cases)} cases, {len(candidates)} candidate panels, "
+                  f"{benchmark.distinct_jobs(cases, candidates)} distinct jobs, "
+                  f"maximum attempts {benchmark.maximum_attempts(cases, candidates)}, "
+                  f"call cap {args.max_calls}, report {report_path}")
+        report = benchmark.run(
+            cases, pack_hash, candidates, report_path=report_path,
+            max_calls=args.max_calls, resume=bool(args.resume), retry_errors=args.retry_errors,
+            progress=None if args.json else print,
+            on_snapshot=lambda snapshot: score(snapshot, cases, candidates),
+        )
+    except (ValueError, OSError) as exc:
+        message = str(exc)
+        if not (message.startswith("Invalid case file") or message.startswith("Panel contains a duplicate")
+                or message.startswith("--max-calls") or message.startswith("Invalid resume")):
+            message = "Invalid benchmark configuration or report."
+        print(message, file=sys.stderr)
+        return 5
+
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        for spec, rows in report["outcomes"].items():
+            print(f"\nPanel {spec}")
+            for row in rows:
+                print(f"  {row['case_id']} ({row['label']}): {row['status']}")
+            totals = report["summary"][spec]
+            latency = totals["median_latency_ms"]
+            latency_text = "n/a" if latency is None else f"{latency:g} ms"
+            print(f"  unsafe approvals {totals['unsafe_approvals']}/{totals['unsafe_denominator']}; "
+                  f"missed blocks {totals['missed_blocks']}/{totals['injected_total']}; "
+                  f"false rejections {totals['false_rejections']}/{totals['correct_total']}; "
+                  f"unavailable {totals['unavailable']}/{totals['total']}; "
+                  f"completed {totals['completed']}/{totals['total']}; "
+                  f"actionable {totals['actionable']}/{totals['total']}; "
+                  f"median judge latency {latency_text}")
+        if report["recommendation"]:
+            tied = len(report["recommendation"]["panels"]) > 1
+            print("\nTied provisional panel suggestions from these cases:"
+                  if tied else "\nProvisional panel suggestion from these cases:")
+            for spec in report["recommendation"]["panels"]:
+                print(f"  --panel {spec}")
+        else:
+            print(f"\nNo panel recommendation: {report['recommendation_reason']}")
+        print(f"Report saved: {report_path}")
+    return 0 if report["state"] == "complete" else 4
+
+
 def main(argv: list[str] | None = None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(errors="backslashreplace")
     load_dotenv()
     parser = argparse.ArgumentParser(prog="agentjury", description="Peer review for AI agent output.")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -266,7 +331,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("output", help="File containing the agent's output, or - for stdin.")
     p.add_argument("--context", help="File with background the judges should know.")
     p.add_argument("--panel", default=os.environ.get("AGENTJURY_PANEL", DEFAULT_PANEL),
-                   help=f"role:provider pairs, comma-separated (default: {DEFAULT_PANEL})")
+                   help=f"role:provider[:model] entries, comma-separated (default: {DEFAULT_PANEL})")
     p.add_argument("--roles", default=os.environ.get("AGENTJURY_ROLES"),
                    help="JSON file of extra roles {name: description}, e.g. a domain expert.")
     p.add_argument("--quorum", type=int, help="Minimum judges that must respond (default: majority).")
@@ -303,6 +368,18 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("schema", help="Print the JSON schema for the protocol objects.")
     s.add_argument("object", choices=["request", "verdict"], nargs="?", default="verdict")
     s.set_defaults(func=cmd_schema)
+
+    b = sub.add_parser("benchmark", help="Compare explicit panels on labeled cases.")
+    b.add_argument("--cases", type=Path, help="UTF-8 JSON case file (default: built-in starter cases).")
+    b.add_argument("--panel", action="append", required=True,
+                   help="Candidate panel in the same syntax as review; repeat to compare.")
+    b.add_argument("--max-calls", type=int, default=20,
+                   help="Maximum provider completion attempts this run (default: 20); "
+                        "an unfinished job may repeat on resume.")
+    b.add_argument("--resume", type=Path, help="Continue a saved benchmark report.")
+    b.add_argument("--retry-errors", action="store_true", help="Retry failed jobs while retaining successes.")
+    b.add_argument("--json", action="store_true", help="Print the saved report as JSON only.")
+    b.set_defaults(func=cmd_benchmark)
 
     args = parser.parse_args(argv)
     return args.func(args)

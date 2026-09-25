@@ -1,10 +1,13 @@
 """The adjudicate and verdicts CLI commands, against a saved verdict from FakeJudges."""
 
+import io
 import json
+import sys
 
 import pytest
 
 from agentjury import Panel, ReviewRequest, Verdict
+from agentjury import cli
 from agentjury.cli import main
 from agentjury.judges import FakeJudge
 
@@ -33,6 +36,24 @@ def reload(d, v):
 def events(d):
     f = d / "adjudications.jsonl"
     return [json.loads(l) for l in f.read_text(encoding="utf-8").splitlines()] if f.is_file() else []
+
+
+def test_review_prints_on_legacy_windows_stdout(tmp_path, monkeypatch):
+    task = tmp_path / "task.md"
+    output = tmp_path / "output.md"
+    task.write_text("Check the answer.", encoding="utf-8")
+    output.write_text("The answer is 323.", encoding="utf-8")
+    monkeypatch.setattr(cli, "build_panel", lambda spec, quorum=None: Panel([FakeJudge("accuracy")]))
+
+    buffer = io.BytesIO()
+    with io.TextIOWrapper(buffer, encoding="cp1252") as stdout:
+        monkeypatch.setattr(sys, "stdout", stdout)
+        result = main(["review", str(task), str(output), "--no-save"])
+        stdout.flush()
+        rendered = buffer.getvalue().decode("cp1252")
+
+    assert result == 0
+    assert "verified" in rendered
 
 
 def test_adjudicate_findings_and_review(saved, capsys):

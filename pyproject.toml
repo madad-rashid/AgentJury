@@ -53,3 +53,6 @@ Changelog = "https://github.com/madad-rashid/AgentJury/releases"
 
 [tool.setuptools.packages.find]
 include = ["agentjury*"]
+
+[tool.setuptools.package-data]
+agentjury = ["data/*.json"]

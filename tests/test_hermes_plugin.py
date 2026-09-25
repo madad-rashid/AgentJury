@@ -69,6 +69,23 @@ def test_register_wires_hooks_and_command(plugin, tmp_path):
     assert jury.data_dir == tmp_path / "plugin-data" / "agentjury"
 
 
+def test_hermes_uses_shared_panel_parser(plugin, monkeypatch):
+    from agentjury import panel_config
+    from hermes_agentjury.jury import Settings, build_panel
+
+    seen = []
+    sentinel = object()
+
+    def shared(spec, quorum=None):
+        seen.append((spec, quorum))
+        return sentinel
+
+    monkeypatch.setattr(panel_config, "build_panel", shared)
+    settings = Settings(panel="accuracy:ollama:qwen3:8b", quorum=1)
+    assert build_panel(settings) is sentinel
+    assert seen == [("accuracy:ollama:qwen3:8b", 1)]
+
+
 def test_short_responses_are_skipped(plugin, tmp_path):
     jury, _ = make_jury(plugin, tmp_path, min_chars=100)
     assert jury.on_turn_end("s1", "hi", "hello!") is None
