@@ -220,6 +220,8 @@ Judges vote ▲ approve, ▼ revise, or – abstain. Abstentions are recorded bu
 
 No single judge can block. `blocked` requires blocking findings from two different providers. One blocking finding downgrades the result to `needs_revision`.
 
+A local check also looks for explicit commands aimed at the reviewers inside the submitted answer. If the judges would otherwise approve such an answer, AgentJury returns `needs_revision` and prints a separate `Local check` warning with the matching excerpt. The warning is not a judge vote or finding and requires no extra model call.
+
 A panel needs a quorum of voters, by default a strict majority of requested judges:
 
 ```text
