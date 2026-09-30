@@ -12,3 +12,8 @@ def openai_judge(role: str, model: str | None = None):
 def anthropic_judge(role: str, model: str | None = None):
     from .anthropic_judge import AnthropicJudge
     return AnthropicJudge(role, model) if model else AnthropicJudge(role)
+
+
+def ollama_judge(role: str, model: str | None = None):
+    from .ollama import OllamaJudge
+    return OllamaJudge(role, model)

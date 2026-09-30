@@ -55,6 +55,24 @@ plugins:
         feedback: true
 ```
 
+### Local Ollama panel
+
+Install the AgentJury source checkout into Hermes's Python environment and copy
+the matching plugin folder. Start Ollama and choose a model from `ollama list`.
+Set `AGENTJURY_OLLAMA_MODEL=your-installed-model` in the environment available to
+the Hermes process. No provider API key is needed for an Ollama-only panel.
+Set `AGENTJURY_OLLAMA_URL` only if the server differs from `http://localhost:11434`.
+
+Use the same settings location shown above, with:
+
+```yaml
+panel: "accuracy:ollama,critic:ollama,executive:ollama"
+```
+
+Restart Hermes after changing its environment. Local models count as one provider;
+using several model names does not add provider diversity. Existing quorum,
+failure, and single-provider blocking rules apply.
+
 ## Use
 
 Type `/jury` in any session to see the latest verdict, or `/jury <request_id>`

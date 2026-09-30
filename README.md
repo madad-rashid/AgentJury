@@ -65,6 +65,50 @@ agentjury review task.md output.md \
 
 Run `agentjury roles` to see the built-in roles. Every verdict is saved to `.agentjury/verdicts/`.
 
+### Local reviews with Ollama
+
+The source checkout also supports Ollama. Install this checkout with `pip install -e .`.
+No provider API key or extra judge SDK is needed for local reviews.
+Start Ollama, run `ollama list`, and choose an installed model.
+
+Linux/macOS:
+
+```bash
+export AGENTJURY_OLLAMA_MODEL="your-installed-model"
+agentjury review task.md output.md --panel accuracy:ollama,critic:ollama,executive:ollama
+```
+
+PowerShell:
+
+```powershell
+$env:AGENTJURY_OLLAMA_MODEL = "your-installed-model"
+agentjury review task.md output.md --panel accuracy:ollama,critic:ollama,executive:ollama
+```
+
+Replace `your-installed-model` with the exact name from `ollama list`, including its tag.
+Alternatively, put `AGENTJURY_OLLAMA_MODEL=your-installed-model` in your local `.env`.
+The default server is `http://localhost:11434`. Set `AGENTJURY_OLLAMA_URL` to use another server.
+Review content is sent to the configured server. The per-call timeout is 120 seconds;
+the shared retry and JSON repair policies still apply.
+
+For different models or a custom timeout per reviewer, use Python:
+
+```python
+from agentjury import Panel, ReviewRequest
+from agentjury.judges.ollama import OllamaJudge
+
+panel = Panel([
+    OllamaJudge("accuracy", model="your-installed-model", timeout=180),
+    OllamaJudge("critic", model="another-installed-model", timeout=180),
+])
+verdict = panel.review(ReviewRequest(task="Calculate 2 + 2.", output="4"))
+print(verdict.status)
+```
+
+All Ollama models count as one provider. A local-only panel uses the existing
+single-provider rules, including two judges for a blocking verdict. Mixing Ollama
+and a hosted provider requires votes from both providers to reach a verdict.
+
 ## Architecture
 
 ```mermaid
@@ -98,7 +142,7 @@ AgentJury separates generation from verification. Reviewers see the task and out
 
 Judges vote ▲ approve, ▼ revise, or – abstain. Abstentions are recorded but never counted as approval, and they count against quorum.
 
-No single judge can block. `blocked` requires blocking findings from two different providers. One blocking finding downgrades the result to `needs_revision`.
+No single judge can block. `blocked` requires blocking findings from two different providers, or two judges in a single-provider panel. One blocking finding downgrades the result to `needs_revision`.
 
 A panel needs a quorum of voters, by default a strict majority of requested judges:
 
@@ -212,7 +256,8 @@ The next research step is reviewer reputation by task type using human-adjudicat
 - [x] Abstain vote, provider floor, retry, repair, timeouts, CI
 - [x] Human finding-level adjudication and append-only adjudication history
 - [x] PyPI release
-- [ ] Additional judge providers and local-model adapter
+- [x] Local-model adapter via Ollama (source checkout)
+- [ ] Additional hosted judge providers
 - [ ] Reviewer reputation by task type, weighted by human agreement over time
 - [ ] Jury diversity weighting from historical disagreement
 - [ ] Calibrated confidence from observed outcomes

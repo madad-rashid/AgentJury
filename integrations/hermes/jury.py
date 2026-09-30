@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from agentjury import Artifact, Panel, Producer, ReviewRequest, Verdict
-from agentjury.judges import ROLES, anthropic_judge, load_roles, openai_judge
+from agentjury.judges import ROLES, anthropic_judge, load_roles, ollama_judge, openai_judge
 
 log = logging.getLogger("agentjury.hermes")
 
@@ -31,7 +31,7 @@ WRITE_TOOLS = {"write_file", "patch", "file_edit", "edit_file", "create_file", "
 PATH_KEYS = ("path", "file_path", "filename", "file", "target")
 MAX_ARTIFACTS = 5
 MAX_ARTIFACT_CHARS = 20_000
-PROVIDERS = {"openai": openai_judge, "anthropic": anthropic_judge}
+PROVIDERS = {"openai": openai_judge, "anthropic": anthropic_judge, "ollama": ollama_judge}
 
 
 @dataclass

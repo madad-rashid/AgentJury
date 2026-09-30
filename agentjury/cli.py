@@ -29,7 +29,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from .judges import ROLES, anthropic_judge, load_roles, openai_judge
+from .judges import ROLES, anthropic_judge, load_roles, ollama_judge, openai_judge
 from .judges.base import Judge
 from .panel import Panel
 from .protocol import HumanReview, Producer, ReviewRequest, Verdict
@@ -40,6 +40,7 @@ VERDICT_DIR = Path(".agentjury") / "verdicts"
 PROVIDERS = {
     "openai": openai_judge,
     "anthropic": anthropic_judge,
+    "ollama": ollama_judge,
 }
 
 SEVERITY_MARK = {"minor": "-", "major": "!", "blocking": "X"}
