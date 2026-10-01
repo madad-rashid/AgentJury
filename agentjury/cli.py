@@ -13,7 +13,7 @@ Verdicts are read from --dir, else $AGENTJURY_VERDICT_DIR, else .agentjury/verdi
 Exit codes: 0 verified, 1 needs_revision, 2 blocked, 3 insufficient_jury.
 
 TASK and OUTPUT are files (or "-" to read OUTPUT from stdin).
-PANEL is a comma-separated list of role:provider pairs, for example
+PANEL is a comma-separated list of role:provider[:model] entries, for example
     accuracy:openai,critic:anthropic,executive:openai
 Every verdict is saved to .agentjury/verdicts/<request_id>.json so that
 reviews accumulate over time.
@@ -29,7 +29,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from .judges import ROLES, anthropic_judge, load_roles, openai_judge
+from .judges import ROLES, anthropic_judge, load_roles, openai_judge, openrouter_judge
 from .judges.base import Judge
 from .panel import Panel
 from .protocol import HumanReview, Producer, ReviewRequest, Verdict
@@ -40,6 +40,7 @@ VERDICT_DIR = Path(".agentjury") / "verdicts"
 PROVIDERS = {
     "openai": openai_judge,
     "anthropic": anthropic_judge,
+    "openrouter": openrouter_judge,
 }
 
 SEVERITY_MARK = {"minor": "-", "major": "!", "blocking": "X"}
@@ -56,14 +57,19 @@ def build_panel(spec: str, quorum: int | None = None) -> Panel:
         if not item:
             continue
         try:
-            role, provider = item.split(":")
+            parts = item.split(":", 2)
+            role, provider = parts[:2]
+            model = parts[2] if len(parts) == 3 else None
+            if model == "":
+                raise ValueError("Empty model")
         except ValueError:
-            sys.exit(f"Bad panel entry {item!r}. Use role:provider, e.g. critic:anthropic")
+            sys.exit(f"Bad panel entry {item!r}. Use role:provider[:model], e.g. critic:anthropic")
         if role not in ROLES:
             sys.exit(f"Unknown role {role!r}. Known roles: {', '.join(sorted(ROLES))}")
         if provider not in PROVIDERS:
             sys.exit(f"Unknown provider {provider!r}. Known providers: {', '.join(PROVIDERS)}")
-        judges.append(PROVIDERS[provider](role))
+        factory = PROVIDERS[provider]
+        judges.append(factory(role, model) if model is not None else factory(role))
     return Panel(judges, quorum=quorum)
 
 
@@ -266,7 +272,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("output", help="File containing the agent's output, or - for stdin.")
     p.add_argument("--context", help="File with background the judges should know.")
     p.add_argument("--panel", default=os.environ.get("AGENTJURY_PANEL", DEFAULT_PANEL),
-                   help=f"role:provider pairs, comma-separated (default: {DEFAULT_PANEL})")
+                   help=f"role:provider[:model] entries, comma-separated (default: {DEFAULT_PANEL})")
     p.add_argument("--roles", default=os.environ.get("AGENTJURY_ROLES"),
                    help="JSON file of extra roles {name: description}, e.g. a domain expert.")
     p.add_argument("--quorum", type=int, help="Minimum judges that must respond (default: majority).")

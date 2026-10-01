@@ -65,6 +65,50 @@ agentjury review task.md output.md \
 
 Run `agentjury roles` to see the built-in roles. Every verdict is saved to `.agentjury/verdicts/`.
 
+### One-key panels with OpenRouter
+
+The source checkout supports OpenRouter without an extra SDK. Install the checkout
+with `pip install -e .` and set `OPENROUTER_API_KEY` in your environment or local `.env`.
+Choose full model IDs from the [OpenRouter catalog](https://openrouter.ai/models).
+
+```bash
+agentjury review task.md output.md \
+  --panel accuracy:openrouter:openai/gpt-5.2,critic:openrouter:anthropic/claude-sonnet-4.6
+```
+
+These are example IDs. Replace them with the current catalog IDs you want to use.
+The panel syntax is `role:provider[:model]`; existing `role:provider` settings still work.
+Model variants such as `:free` are preserved after the third field.
+For one model across all OpenRouter roles, set `AGENTJURY_OPENROUTER_MODEL` and use
+`--panel accuracy:openrouter,critic:openrouter,executive:openrouter`.
+
+Python:
+
+```python
+from agentjury import Panel, ReviewRequest
+from agentjury.judges.openrouter import OpenRouterJudge
+
+panel = Panel([
+    OpenRouterJudge("accuracy", "openai/gpt-5.2"),
+    OpenRouterJudge("critic", "anthropic/claude-sonnet-4.6"),
+])
+verdict = panel.review(ReviewRequest(task="Calculate 2 + 2.", output="4"))
+print(verdict.status)
+```
+
+Reviews count the model author as the provider, not the OpenRouter gateway or
+inference hosting company. Direct OpenAI and routed OpenAI count as one provider;
+OpenAI and Anthropic count as two. `params.transport` records `openrouter`, while
+`params.requested_model` preserves the requested variant. `model` records the base
+model ID. This measures model-author diversity, not independence of hosting infrastructure.
+
+Use fixed catalog model IDs. Automatic routers, tilde aliases, and presets are
+rejected. A response from another model fails the judge instead of changing its
+identity. Different inference hosts serving the same fixed model are allowed.
+The adapter sends review content to OpenRouter, uses a 60-second per-call timeout,
+and reuses the shared retry and JSON repair policies. No live model calls are
+required for the test suite.
+
 ## Architecture
 
 ```mermaid
@@ -212,6 +256,7 @@ The next research step is reviewer reputation by task type using human-adjudicat
 - [x] Abstain vote, provider floor, retry, repair, timeouts, CI
 - [x] Human finding-level adjudication and append-only adjudication history
 - [x] PyPI release
+- [x] OpenRouter transport with model-author provider counting (source checkout)
 - [ ] Additional judge providers and local-model adapter
 - [ ] Reviewer reputation by task type, weighted by human agreement over time
 - [ ] Jury diversity weighting from historical disagreement

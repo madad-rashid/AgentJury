@@ -16,7 +16,7 @@ python_dependencies:
   - "openai>=1.0"
   - "anthropic>=0.30"
 config_schema:
-  panel:        {type: str,  default: "accuracy:openai,critic:anthropic,executive:openai", description: "role:provider pairs"}
+  panel:        {type: str,  default: "accuracy:openai,critic:anthropic,executive:openai", description: "role:provider[:model] entries; providers: openai, anthropic, openrouter"}
   roles_file:   {type: str,  default: "", description: "JSON file of extra judge roles, e.g. a domain expert"}
   context_file: {type: str,  default: "", description: "Markdown file of organisational context given to every judge"}
   quorum:       {type: int,  default: 0,  description: "Minimum voters; 0 = strict majority"}

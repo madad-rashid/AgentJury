@@ -55,6 +55,24 @@ plugins:
         feedback: true
 ```
 
+### OpenRouter panel
+
+Install the source checkout into Hermes's Python environment and copy the matching
+plugin folder. Set `OPENROUTER_API_KEY` in the environment available to Hermes.
+Use full current model IDs from the OpenRouter catalog. In the settings location
+shown above:
+
+```yaml
+panel: "accuracy:openrouter:openai/gpt-5.2,critic:openrouter:anthropic/claude-sonnet-4.6"
+```
+
+Replace the example model IDs with your selections. Alternatively, set
+`AGENTJURY_OPENROUTER_MODEL` and use `panel: "accuracy:openrouter,critic:openrouter"`.
+Restart Hermes after changing its environment. No provider SDK is required by the
+OpenRouter adapter. Model authors count as providers; two models from the same
+author do not add provider diversity. Automatic routers, tilde aliases, and presets
+are unsupported. Reviews are sent through OpenRouter.
+
 ## Use
 
 Type `/jury` in any session to see the latest verdict, or `/jury <request_id>`
