@@ -185,6 +185,25 @@ omit the original case text, checked excerpts, and configured keys. A model
 behind an unchanged slug can change over time, so compare report timestamps
 when repeating a run.
 
+To inspect a saved benchmark without contacting any model service, run:
+
+```powershell
+agentjury benchmark-audit .agentjury/benchmarks/REPORT.json
+agentjury benchmark-audit .agentjury/benchmarks/REPORT.json --json
+```
+
+The audit counts each reviewer's approve/revise vote against the case label,
+lists case IDs where two reviewers made the same mistake, and compares each
+panel's raw majority with its best observed individual reviewer on cases all
+panel members answered. A revise vote is the safe binary direction for both
+`flawed` and `injected` cases; the normal benchmark separately checks whether
+an injected answer was actually blocked. The best observed reviewer has the
+fewest false approvals, then the most correct vote directions on those same
+cases. Ties and unavailable reviews stay separate. These are descriptive
+counts, not calibrated confidence or evidence that one panel will win on new
+tasks. The audit prints case IDs, never task or answer text, and works on
+partial and older saved benchmark reports.
+
 ## Architecture
 
 ```mermaid

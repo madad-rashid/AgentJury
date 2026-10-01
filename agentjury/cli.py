@@ -34,6 +34,7 @@ from dotenv import load_dotenv
 from .judges import ROLES, load_roles
 from . import panel_config
 from . import benchmark
+from .benchmark_audit import audit_report
 from .benchmark_cases import load_cases
 from .benchmark_score import score
 from .panel import Panel
@@ -328,6 +329,56 @@ def cmd_benchmark(args: argparse.Namespace) -> int:
     return 0 if report["state"] == "complete" else 4
 
 
+def cmd_benchmark_audit(args: argparse.Namespace) -> int:
+    try:
+        report = json.loads(args.report.read_text(encoding="utf-8"))
+        result = audit_report(report)
+    except (OSError, UnicodeError, json.JSONDecodeError, ValueError):
+        print("Invalid benchmark report.", file=sys.stderr)
+        return 5
+
+    if args.json:
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        return 0
+
+    def label(value: str) -> str:
+        return json.dumps(value, ensure_ascii=True)
+
+    print(f"Offline benchmark audit: {result['case_count']} labeled cases "
+          f"({result['state']}; descriptive counts)")
+    print("\nReviewers")
+    for stats in result["judges"].values():
+        print(f"  {label(stats['name'])}: {stats['correct']}/{stats['judged']} correct votes; "
+              f"false approvals {stats['false_approvals']}; "
+              f"false rejections {stats['false_rejections']}; "
+              f"unavailable {stats['unavailable']}; pending {stats['pending']}")
+    print("\nShared errors")
+    if not result["pairs"]:
+        print("  No reviewer pairs in this report.")
+    for pair in result["pairs"]:
+        left, right = pair["judge_ids"]
+        cases = ", ".join(label(case_id) for case_id in pair["both_wrong"]) or "none"
+        print(f"  {label(result['judges'][left]['name'])} + "
+              f"{label(result['judges'][right]['name'])}: "
+              f"{len(pair['both_wrong'])}/{pair['compared']} both wrong; cases {cases}")
+    print("\nPanel majority versus best observed reviewer (same completed cases)")
+    for spec, comparison in result["panels"].items():
+        majority = comparison["majority"]
+        best = comparison["best_single"]
+        print(f"  {label(spec)}: {comparison['common_cases']} common cases; "
+              f"majority {majority['correct']} correct, "
+              f"{majority['false_approvals']} false approvals, "
+              f"{majority['false_rejections']} false rejections, "
+              f"{majority['ties']} ties")
+        if best is not None:
+            names = ", ".join(label(result["judges"][judge_id]["name"])
+                              for judge_id in comparison["best_judge_ids"])
+            print(f"    best observed reviewer {names}: {best['correct']} correct, "
+                  f"{best['false_approvals']} false approvals, "
+                  f"{best['false_rejections']} false rejections")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(errors="backslashreplace")
@@ -389,6 +440,11 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("--retry-errors", action="store_true", help="Retry failed jobs while retaining successes.")
     b.add_argument("--json", action="store_true", help="Print the saved report as JSON only.")
     b.set_defaults(func=cmd_benchmark)
+
+    a = sub.add_parser("benchmark-audit", help="Analyze a saved benchmark report offline.")
+    a.add_argument("report", type=Path, help="Saved benchmark JSON report.")
+    a.add_argument("--json", action="store_true", help="Print structured audit data.")
+    a.set_defaults(func=cmd_benchmark_audit)
 
     args = parser.parse_args(argv)
     return args.func(args)
