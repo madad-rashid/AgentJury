@@ -170,3 +170,79 @@ model/prompt compliance on a representative labeled pack, including correct
 artifact acceptance and grounded wrong-answer rejection. This tiny smoke proves
 neither general accuracy nor reviewer independence. There were no cloud model
 calls, credentials, production changes, merges or releases.
+
+
+## Authorized larger local comparison — 2026-10-02
+
+After separate hardware-check/download authorization, the same three synthetic
+cases ran once on exact PR head `e1f60186359bb3f4cd2e5397d3f6a1ed021ea9a8`.
+That head only added the preceding smoke documentation to implementation
+`bc0c217`; the working tree was clean before and after inference.
+
+Hardware observed: RTX 4070 Laptop GPU, 8,188 MiB VRAM; 31.4 GiB physical RAM,
+about 9.5 GiB available at selection; 17.2 GiB free disk before download.
+The [official Ollama registry](https://ollama.com/library/qwen2.5:7b-instruct)
+listed `qwen2.5:7b-instruct`, 7.62B parameters, Q4_K_M, approximately 4.7 GB,
+under Apache 2.0. One model was downloaded through existing Ollama, which
+verified its SHA-256 before success. Installed digest:
+`845dbda0ea48ed749caafd9e6037047aa19acfcfd82e704d7ca97d631a0b697e`.
+The installed size was 4,683,087,332 bytes, leaving 12.8 GiB free disk. Both
+previous Qwen models were preserved; no software or system settings changed.
+
+The task-local harness retained temperature 0, seed 42, context 8,192,
+output limit 1,200 tokens, 90-second per-call timeout, zero transport retries,
+single opinion repair, sequential accuracy/critic roles and quorum 2. This
+model has no thinking capability, so the unsupported `think` payload field
+was omitted rather than sent as false. Other case contents and native
+protocol/evidence/aggregation behavior were unchanged. Raw native responses
+were captured for these synthetic cases. There were eight completed calls:
+two per arithmetic case and four for the artifact case including repairs.
+All reported the requested model and `done_reason=stop`; no timeout or
+truncation occurred. No additional live diagnostic inference was needed.
+
+| Same synthetic case | Prior 4B result / time | 7B result / time |
+| --- | --- | --- |
+| Correct `17 + 25 = 42.` | `verified`, 2 approve / 3.84 s | `verified`, 2 approve, no findings, score 10 / 26.33 s |
+| Wrong `17 + 25 = 43.` | `insufficient_jury`, invalid opinions / 26.42 s | `needs_revision`, 2 revise with accepted major findings / 7.37 s |
+| Correct disposable file through Hermes hooks | `insufficient_jury`, invalid opinions / 33.29 s | `insufficient_jury`, both opinions invalid after repair / 15.77 s |
+
+Both 7B wrong-answer findings correctly pointed to `17 + 25 = 43.` and quoted
+the task as their basis. Both labeled it `major`, not `blocking`, so the
+expected wrong-answer rejection occurred but the hoped-for blocking verdict
+did not. Accepted excerpts prove attribution, not the arithmetic inference.
+
+For the correct file, both roles falsely criticized `17 + 25 = 42.`. Their
+basis excerpts claimed that equation appeared in the assistant response, which
+only said the note had been written. The artifact quote was present, but its
+basis source was wrong. Repair retained invalid attribution; one repair also
+omitted the artifact ID. Strict evidence validation correctly rejected these
+opinions. No valid findings entered the aggregate, and the model's false
+criticism remains an observed quality failure rather than a proven file defect.
+
+The actual isolated Hermes registration/hooks again persisted the verdict,
+recorded full artifact coverage with applied annotation, wrote
+`insufficient_jury` frontmatter/sidecar, and returned feedback once, then none.
+This remains host integration-harness validation, not running-Hermes producer
+or production-vault end-to-end validation.
+
+Ollama reported 4,987,132,312 bytes of model VRAM at context 8,192, with
+`size_vram` equal to its runtime model size. A GPU snapshot showed 6,861 MiB
+used overall and 1,088 MiB free while inference ran. The first correct-case
+call took 24.42 s, including 12.55 s model loading and 10.48 s prompt evaluation;
+the second took 1.87 s. This cold run is not a like-for-like latency comparison
+with the prior warm 4B result. Other reported times include any repair calls.
+No memory-pressure failure was observed; only the bounded context was tested.
+
+The larger model improved usable wrong-answer review in this tiny comparison,
+but still failed correct artifact acceptance and severity expectations. Model
+family/version, template and thinking support also changed, so improvement
+cannot be attributed solely to parameter count. Both roles use the same local
+model/provider; neither statistical independence nor calibrated confidence is
+established. No automatic benchmark recommendation was run or earned.
+
+Recommendation: retain the evidence gates and keep this configuration in
+experimental use. Next evaluate correct-artifact acceptance, excerpt-source
+compliance and severity consistency on a representative labeled pack before
+routine certification. Do not infer that downloading a larger model solved
+review quality. No cloud inference, credential handling, production gateway
+changes, existing-model deletion, merge or release occurred.
