@@ -51,7 +51,9 @@ class Artifact(BaseModel):
 
     @model_validator(mode="after")
     def _digest(self) -> "Artifact":
-        if self.content_sha256 is None:
+        # A full artifact's identity is derived from the supplied text. Partial
+        # artifacts may carry the digest of the full source, not the excerpt.
+        if self.coverage == "full" or self.content_sha256 is None:
             self.content_sha256 = hashlib.sha256(self.content.encode("utf-8")).hexdigest()
         return self
 

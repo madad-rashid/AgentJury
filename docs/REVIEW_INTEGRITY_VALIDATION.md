@@ -727,4 +727,26 @@ Incremental response-reported cost **$0.078987**, cumulative **$0.088319** under
 the unchanged $3 non-resetting cap. The immediate accounting counter lag is kept
 historically; later reconciliation status and exact remaining allowance appear
 in the [resumed comparison report and frozen sanitized evidence](openrouter-resumed-comparison.md).
-No further inference or code tuning followed these results; PR remains draft.
+No further inference or model-policy tuning followed these results; PR remains draft.
+
+## Artifact digest boundary follow-up - 2026-10-02
+
+Review of report commit `6f31744a5136b6679d1b93a63d4d7bddf7448ce3` found that
+full artifacts trusted supplied hashes and retained stale hashes after content
+mutation. An offline real base-Judge approval reviewed `323` while panel coverage
+identified the digest of `324`. Full-artifact validation now derives the digest
+from actual UTF-8 text; the panel reconstructs a detached, validated request
+before dispatch. Caller edits during completion cannot change that snapshot.
+Partial-artifact supplied hashes remain full-source identities, not excerpt
+hashes or proof that unseen source text was reviewed.
+
+Regression checks first reproduced three expected digest failures with one
+partial-source preservation check passing. After the fix, all 27 focused
+digest/source/annotation tests passed using an isolated workspace temp directory.
+The initial broader attempt had 11 temp-fixture permission errors and 16 passes;
+it did not indicate product failures. This follow-up makes no model calls and
+does not change the frozen comparison implementation or its recorded results.
+The full Windows/Python 3.13 offline suite passed **540 tests, 2 skipped** in
+67.93 seconds; the two skipped tests require opt-in live services. Documentation
+links, package manifest requirements, example provenance and demo aggregation
+also passed.

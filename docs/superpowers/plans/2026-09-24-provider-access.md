@@ -44,7 +44,7 @@
 - Produces: a `Judge` whose `provider` is the OpenRouter model vendor, `ollama`, or `compatible`; whose `model` is the exact requested model; and whose `params` include `route` and `endpoint_hash`.
 - Consumes: `Judge`, `Completion`, and environment settings from the approved spec.
 
-- [ ] **Step 1: Prepare an isolated Python environment for this task.** Use the bundled Python at `C:\Users\qtr_r\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe` to create `.venv`, then run `& .\.venv\Scripts\python.exe -m pip install -e '.[all,dev]'`. `.venv` is ignored by the repository. If package downloads are blocked by the sandbox, request network escalation for this exact install rather than changing the global Python runtime.
+- [ ] **Step 1: Prepare an isolated Python environment for this task.** Run `python -m venv .venv` with Python 3.11 or newer, activate the environment, then run `python -m pip install -e '.[all,dev]'`. `.venv` is ignored by the repository. If package downloads are blocked by the sandbox, request network escalation for this exact install rather than changing the global Python runtime.
 
 - [ ] **Step 2: Write failing adapter tests.** In `tests/test_compatible_judge.py`, inject a fake `openai.OpenAI` into `sys.modules` before constructing a judge. Start the file with `import json, sys, types, pytest`, `from agentjury import Panel, ReviewRequest`, and this fixture, which captures constructor and request arguments and can simulate failures:
 

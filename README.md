@@ -343,6 +343,12 @@ Identity hierarchy:
 - `finding.id`: one specific issue raised by a reviewer
 - `artifact_id`: one captured file or blob within a request, with coverage and SHA-256 content digest
 
+Full-artifact digests are derived from their UTF-8 text, including when a caller
+supplies a different hash. At panel dispatch, the request is copied and
+revalidated so edits after construction cannot leave stale coverage hashes or
+change the caller's already-dispatched snapshot. Partial artifacts retain a
+supplied full-source digest; it does not certify the unseen source content.
+
 Verdicts are saved as `<request_id>-<run_id>.json`.
 
 ## Custom roles

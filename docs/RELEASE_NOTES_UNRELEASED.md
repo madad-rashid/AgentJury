@@ -4,6 +4,12 @@ These changes consolidate the draft provider and free-jury branches on
 `fix/review-integrity`. They have not been merged or published to PyPI.
 The current published v0.4.4 release notes remain a record of that release.
 
+- Recompute full-artifact digests and revalidate a detached request at panel
+  dispatch, preventing supplied or stale hashes from identifying different
+  content in verified coverage. Preserve partial-artifact full-source hashes.
+- Replace the provider-access plan's machine-specific interpreter path with
+  portable Python environment commands.
+
 - Added OpenRouter, Ollama, and generic OpenAI-compatible provider routes.
 - Added a local benchmark for comparing explicit free-model panels on built-in
   and user-supplied labeled cases. The call cap counts provider attempts,

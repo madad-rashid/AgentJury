@@ -36,6 +36,9 @@ class Panel:
         return hashlib.sha256(roster.encode()).hexdigest()[:12]
 
     def review(self, request: ReviewRequest) -> Verdict:
+        # Revalidate detached material at dispatch: callers may have edited an
+        # Artifact after construction, including its content or declared hash.
+        request = ReviewRequest.model_validate(request.model_dump())
         completed: list[tuple[int, Review]] = []
         errors: list[str] = []
 
