@@ -666,3 +666,20 @@ limitations. The prior funding blocker is a labeled reconstruction of its record
 tool result, not a contemporaneous raw preflight file. Public evidence omits
 credentials, headers, account balance and generation ID. This docs-only follow-up
 is not merged, released or deployed; its exact-revision CI is recorded on PR8.
+
+
+## Sanitized diagnostic and billing follow-up - 2026-10-02
+
+The stopped-test report above remains a historical snapshot. A later bounded
+nonbillable check reconciled generation cost and key usage at **$0.004636**;
+the $3 non-resetting cap is unchanged. No further inference was made.
+Generation alias/token metadata differs from the immediate response; the exact
+original completion rejection and semantic grade remain unresolved.
+
+A separate operator-only diagnostic harness now records sanitized stages,
+categories, shapes and identifier fingerprints before rejection, with all
+acceptance/budget/routing guards preserved. Product adapters are unchanged.
+The original frozen evidence is unchanged. [Diagnostic investigation and
+sanitized accounting observations](openrouter-diagnostic-followup.md) explain
+the established logging defect, offline fixtures, later billing reconciliation
+and a proposed one-call diagnostic requiring separate authorization.
