@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,7 +7,8 @@ name = "agentjury"
 version = "0.4.4"
 description = "Peer review for AI agents using independent model juries and deterministic aggregation."
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     { name = "Rashid Al-Derham" },
 ]
@@ -23,7 +24,6 @@ keywords = [
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -37,10 +37,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-openai = ["openai>=1.0"]
-anthropic = ["anthropic>=0.30"]
-all = ["openai>=1.0", "anthropic>=0.30"]
-dev = ["pytest>=8.0", "build>=1.2", "twine>=5.0"]
+openai = ["openai>=1.55.3"]
+anthropic = ["anthropic>=1.11.0"]
+all = ["openai>=1.55.3", "anthropic>=1.11.0"]
+dev = ["pytest>=8.0", "build>=1.2", "twine>=5.0", "openai>=1.55.3", "anthropic>=1.11.0"]
 
 [project.scripts]
 agentjury = "agentjury.cli:main"

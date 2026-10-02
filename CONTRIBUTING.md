@@ -32,7 +32,10 @@ Run the test suite:
 python -m pytest tests -q
 ```
 
-The normal test suite should not require live model calls.
+The normal test suite blocks network endpoints except ephemeral test servers.
+Keep `AGENTJURY_LIVE=0` for offline validation. Native-route tests must mock the
+transport or use their test HTTP server; never assume an absent SDK prevents a
+native route from calling a local model.
 
 ## Benchmark cases and reports
 
@@ -56,8 +59,9 @@ Reports are saved under `.agentjury/benchmarks/`, which Git ignores. They
 include model-generated reasons and findings; do not share them without
 checking their contents. A case file goes to the selected model services.
 The automatic suggestion is provisional: it needs a complete balanced pack,
-two underlying providers, zero unsafe approvals, and at least 80% actionable
-verdicts. It does not alter the default `review` panel. Free eligibility
+two underlying providers, zero unsafe approvals, zero missed injected blocks,
+at least 80% actionable verdicts and at least 80% correct-case verification.
+It does not alter the default `review` panel. Free eligibility
 requires explicit OpenRouter `:free` slugs or Ollama models. Run
 `agentjury benchmark --help` for cap, resume, retry, and JSON options.
 
@@ -86,9 +90,11 @@ To add a provider:
 7. Disable hidden SDK retries where practical so AgentJury's retry policy stays observable.
 8. Add unit tests for success, provider failure, malformed output, retry, and telemetry.
 
-OpenRouter, Ollama, and other OpenAI-compatible chat services share
-`agentjury/judges/compatible.py`; extend its route configuration when an
-endpoint follows the same request and response shape. Panel syntax and judge
+Native OpenRouter and Ollama transports live in `judges/openrouter.py` and
+`judges/ollama.py`. Custom OpenAI-compatible endpoints use `judges/compatible.py`.
+Validate complete responses and reported model identities before constructing a
+`Completion`; preserve `observed_model`, sanitize errors and disallow redirects.
+Panel syntax and judge
 construction live in `agentjury/panel_config.py`, which is shared by the CLI
 and Hermes. Add a separate adapter only when a provider needs a different API.
 Never put a raw endpoint URL or API key in `Review.params` or `config_id`.
@@ -152,6 +158,9 @@ Important invariants include:
 - deterministic aggregation
 - stable provenance IDs
 - reviewer configuration identity including material model parameters
+- rejection of duplicate configurations in a single panel
+- artifact IDs, digest scope, partial coverage and stale annotation prevention
+- adjudication prevalidation and idempotent recovery after audit interruption
 - failed judges reducing available quorum rather than being treated as approval
 
 ## Pull requests

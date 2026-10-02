@@ -14,13 +14,16 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from .aggregate import aggregate, default_quorum
 from .judges.base import Judge
-from .protocol import Review, ReviewRequest, Verdict
+from .protocol import ArtifactCoverage, Review, ReviewRequest, Verdict
 
 
 class Panel:
     def __init__(self, judges: list[Judge], quorum: int | None = None, max_workers: int | None = None):
         if not judges:
             raise ValueError("A panel needs at least one judge.")
+        identities = [judge.config_id for judge in judges]
+        if len(set(identities)) != len(identities):
+            raise ValueError("Duplicate judge configurations cannot cast independent votes.")
         if quorum is not None and not 1 <= quorum <= len(judges):
             raise ValueError(f"quorum must be between 1 and {len(judges)}, got {quorum}")
         self.judges = judges
@@ -53,6 +56,11 @@ class Panel:
             requested=len(self.judges), quorum=self.quorum, panel_id=self.panel_id,
             requested_providers=len({j.provider for j in self.judges}),
         )
+        verdict.artifact_coverage = [
+            ArtifactCoverage(artifact_id=artifact.artifact_id, name=artifact.name,
+                             content_sha256=artifact.content_sha256, coverage=artifact.coverage)
+            for artifact in request.artifacts
+        ]
         for r in reviews:
             r.request_id = request.request_id
             r.run_id = verdict.run_id

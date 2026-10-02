@@ -49,7 +49,6 @@ def test_trailing_comma_keeps_one_judge(fake_factories):
 
 
 @pytest.mark.parametrize("spec", [
-    "accuracy:ollama",
     "accuracy:openrouter:",
     "accuracy:compatible",
     "accuracy:unknown:x",
@@ -87,3 +86,8 @@ def test_cli_reports_panel_error_without_traceback(monkeypatch):
     monkeypatch.setattr(panel_config, "build_panel", shared)
     with pytest.raises(SystemExit, match="panel needs a model"):
         cli.build_panel("accuracy:ollama")
+
+
+def test_native_short_forms_delegate_environment_defaults(fake_factories):
+    build_panel("accuracy:ollama,critic:openrouter")
+    assert fake_factories == [("accuracy", "ollama", None), ("critic", "openrouter", None)]

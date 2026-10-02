@@ -167,7 +167,7 @@ def test_resume_rejects_changed_input(tmp_path, changed):
 
 def test_duplicate_judge_and_bad_cap_rejected(tmp_path):
     judge = StubJudge()
-    with pytest.raises(ValueError, match="duplicate"):
+    with pytest.raises(ValueError, match="(?i)duplicate"):
         run([_case()], "pack", [_candidate([judge, judge])], report_path=tmp_path / "x.json")
     with pytest.raises(ValueError, match="max-calls"):
         run([_case()], "pack", [_candidate([judge])], report_path=tmp_path / "x.json", max_calls=0)

@@ -1,0 +1,3 @@
+include tests/conftest.py
+recursive-include integrations/hermes *.py *.md *.yaml *.json
+recursive-include docs *.md

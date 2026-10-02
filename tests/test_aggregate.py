@@ -113,7 +113,7 @@ def test_blocking_is_derived_from_findings_not_trusted():
 @pytest.mark.parametrize("n,q", [(1, 1), (2, 2), (3, 2), (4, 3), (5, 3), (6, 4)])
 def test_default_quorum_is_strict_majority(n, q):
     assert default_quorum(n) == q
-    assert Panel([FakeJudge("accuracy") for _ in range(n)]).quorum == q
+    assert Panel([FakeJudge("accuracy", params={"test_slot": i}) for i in range(n)]).quorum == q
 
 
 def test_two_of_four_is_not_a_quorum():
@@ -128,7 +128,7 @@ def test_one_of_two_is_not_a_quorum():
 
 
 def test_one_survivor_of_five_is_insufficient_jury():
-    v = run(FakeJudge("accuracy"), broken("critic"), broken("evidence"), broken("executive"), broken("accuracy"))
+    v = run(FakeJudge("accuracy"), broken("critic"), broken("evidence"), broken("executive"), broken("source_audit"))
     assert v.up == 1 and v.responded == 1 and v.requested == 5 and v.quorum == 3
     assert v.status == "insufficient_jury" and len(v.errors) == 4
 
@@ -176,7 +176,8 @@ def test_direct_and_routed_openai_are_one_provider(monkeypatch):
         def __init__(self, **kwargs):
             pass
 
-    monkeypatch.setitem(sys.modules, "openai", types.SimpleNamespace(OpenAI=Client))
+    from openai import DefaultHttpxClient
+    monkeypatch.setitem(sys.modules, "openai", types.SimpleNamespace(OpenAI=Client, DefaultHttpxClient=DefaultHttpxClient))
     monkeypatch.setenv("OPENAI_API_KEY", "test-openai")
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-router")
     direct = openai_judge("accuracy")
@@ -205,8 +206,8 @@ def test_duplicate_judge_names_keep_configured_order():
             self.saved_id = result.review_id
             return result
 
-    slow = TrackedJudge("accuracy", provider="ollama", delay=0.05)
-    fast = TrackedJudge("accuracy", provider="ollama")
+    slow = TrackedJudge("accuracy", provider="ollama", delay=0.05, params={"model_variant": "slow"})
+    fast = TrackedJudge("accuracy", provider="ollama", params={"model_variant": "fast"})
     verdict = Panel([slow, fast]).review(REQ)
     assert [r.review_id for r in verdict.reviews] == [slow.saved_id, fast.saved_id]
 
@@ -266,7 +267,7 @@ def test_review_carries_ids_params_and_telemetry():
     r = v.reviews[0]
     assert len(r.review_id) == 12 and r.request_id == REQ.request_id and r.panel_id == v.panel_id
     assert r.role == "critic" and r.provider == "fake" and r.model == "fake-1"
-    assert r.rubric_version == "0.4" and len(r.prompt_hash) == 12
+    assert r.rubric_version == "0.5" and len(r.prompt_hash) == 12
     assert r.params["timeout"] == 5.0
     assert r.latency_ms is not None and r.tokens_in == 100 and r.tokens_out == 50
     assert r.findings[0].adjudication is None and r.human_review is None
@@ -283,7 +284,7 @@ def test_verdict_carries_request_metadata():
     req.producer.model = "gpt-5.6"
     v = Panel([FakeJudge("accuracy")]).review(req)
     assert v.task_type == "summary" and v.domain == "finance" and v.producer.model == "gpt-5.6"
-    assert v.schema_version == "0.6" and req.schema_version == "0.6"
+    assert v.schema_version == "0.7" and req.schema_version == "0.7"
 
 
 def _injected_request():

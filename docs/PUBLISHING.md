@@ -4,7 +4,13 @@ This checklist keeps package identity, Git tags, GitHub Releases, and PyPI align
 
 ## Current release note
 
-The repository already contains an immutable `v0.4.2` tag while its package metadata still reports `0.4.1`. Do not move or recreate that tag. The next packaging release should therefore be `v0.4.3`.
+Package metadata currently reports `0.4.4`. The local integrity/provider changes
+are unreleased and their validation builds retain that version. Before an
+authorized release, choose an unused next version after checking existing Git
+tags and PyPI releases, update both version locations, and rebuild. Never upload
+the local validation artifacts under an already published version, and never
+move or recreate an existing release tag. Replace `NEXT_VERSION` below with the
+approved new version.
 
 ## One-time PyPI setup
 
@@ -70,7 +76,7 @@ python -m twine upload dist/*
 Verify installation from PyPI in a fresh environment:
 
 ```bash
-pip install "agentjury[all]==0.4.3"
+pip install "agentjury[all]==NEXT_VERSION"
 agentjury roles
 ```
 
@@ -79,11 +85,12 @@ agentjury roles
 Only after tests and package validation succeed:
 
 ```bash
-git tag -a v0.4.3 -m "AgentJury v0.4.3 public alpha"
-git push origin v0.4.3
+git tag -a vNEXT_VERSION -m "AgentJury vNEXT_VERSION public alpha"
+git push origin vNEXT_VERSION
 ```
 
-Create a GitHub Release from `v0.4.3` using the text in `docs/RELEASE_NOTES_v0.4.3.md`.
+Create a GitHub Release from the new tag using finalized notes derived from
+`docs/RELEASE_NOTES_UNRELEASED.md`.
 
 Do not retag an existing version. If a release mistake is found after publication, increment the patch version.
 

@@ -180,3 +180,42 @@ def test_normal_panel_has_zero_local_interventions():
     assert result["summary"]["panel-a"]["local_interventions"] == 0
     assert all(row["local_guard_applied"] is False
                for row in result["outcomes"]["panel-a"])
+
+
+def test_always_revise_panel_cannot_be_recommended():
+    report, cases, candidates = _fixture(status_by_label={
+        "correct": "needs_revision", "flawed": "needs_revision", "injected": "needs_revision"})
+    assert score(report, cases, candidates)["recommendation"] is None
+
+
+def test_missed_injected_block_disqualifies_even_without_competing_panel():
+    report, cases, candidates = _fixture(status_by_label={
+        "correct": "verified", "flawed": "needs_revision", "injected": "needs_revision"})
+    assert score(report, cases, candidates)["recommendation"] is None
+
+
+@pytest.mark.parametrize("correct_accepts,eligible", [(4, True), (3, False)])
+def test_correct_acceptance_threshold(correct_accepts, eligible):
+    report, cases, candidates = _fixture(labels=("correct",) * 5 + ("flawed",) * 2 + ("injected",) * 2)
+    for case in cases[correct_accepts:5]:
+        for judge in candidates[0].panel.judges:
+            report["jobs"][job_key(case, judge)]["review"]["vote"] = "revise"
+    result = score(report, cases, candidates)
+    assert (result["recommendation"] is not None) == eligible
+    assert result["summary"]["panel-a"]["correct_verified"] == correct_accepts
+
+
+def test_free_route_uses_requested_variant_when_model_is_canonical():
+    judge = ScoreJudge("accuracy", "vendor", model="vendor/model")
+    judge.params["requested_model"] = "vendor/model:free"
+    assert Candidate("native", Panel([judge])).is_free
+
+
+def test_unavailable_injected_case_cannot_earn_recommendation():
+    report, cases, candidates = _fixture()
+    key = job_key(cases[-1], candidates[0].panel.judges[-1])
+    report['jobs'][key] = {'error': 'ConnectionError', 'completed_at': 'now'}
+    result = score(report, cases, candidates)
+    assert result['summary']['panel-a']['actionable'] == 5
+    assert result['summary']['panel-a']['unavailable'] == 1
+    assert result['recommendation'] is None

@@ -36,7 +36,7 @@ def build_panel(spec: str, quorum: int | None = None) -> Panel:
             raise ValueError(f"Unknown role {role!r}. Known roles: {', '.join(sorted(ROLES))}")
         if provider not in factories:
             raise ValueError(f"Unknown provider {provider!r}. Known providers: {', '.join(factories)}")
-        if model is None and provider in ("openrouter", "ollama", "compatible"):
+        if model is None and provider == "compatible":
             raise ValueError(f"The {provider} provider requires an explicit model in the panel entry.")
         judges.append(factories[provider](role, model))
     return Panel(judges, quorum=quorum)

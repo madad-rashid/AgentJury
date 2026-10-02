@@ -25,6 +25,7 @@ import argparse
 import json
 import os
 import sys
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
@@ -177,22 +178,94 @@ def _adjudicator() -> str:
 
 
 def log_event(directory: Path, event: dict) -> None:
-    """Append-only audit trail. The verdict JSON holds current state; this holds history."""
-    from uuid import uuid4
+    """Append one event idempotently, preserving existing history verbatim.
+
+    The caller holds the directory lock. Atomic replacement prevents a torn
+    final JSONL line; retained event IDs make replay after interruption safe.
+    """
     event = {"event_id": uuid4().hex[:12], **event}
-    with (directory / ADJUDICATION_LOG).open("a", encoding="utf-8") as f:
-        f.write(json.dumps(event, default=str) + "\n")
+    path = directory / ADJUDICATION_LOG
+    text = path.read_text(encoding="utf-8") if path.exists() else ""
+    for line in text.splitlines():
+        old = json.loads(line)
+        if old.get("event_id") == event["event_id"]:
+            if old != event:
+                raise ValueError("Conflicting adjudication event identity.")
+            return
+    if text and not text.endswith("\n"):
+        text += "\n"
+    _atomic_write(path, text + json.dumps(event, default=str) + "\n")
+
+
+def _atomic_write(path: Path, text: str) -> None:
+    temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+    try:
+        with temporary.open("w", encoding="utf-8") as stream:
+            stream.write(text)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+@contextmanager
+def _adjudication_lock(directory: Path):
+    """Cross-process lock released by the OS on interruption, including Windows."""
+    with (directory / ".adjudication.lock").open("a+b") as stream:
+        stream.seek(0, os.SEEK_END)
+        if stream.tell() == 0:
+            stream.write(b"0")
+            stream.flush()
+        stream.seek(0)
+        if os.name == "nt":
+            import msvcrt
+            msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        try:
+            yield
+        finally:
+            if os.name == "nt":
+                stream.seek(0)
+                msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
 
 
 def cmd_adjudicate(args: argparse.Namespace) -> int:
+    path, _ = load_verdict(args)
+    try:
+        with _adjudication_lock(path.parent):
+            return _adjudicate_locked(args, path)
+    except OSError:
+        sys.exit("Could not persist adjudication or acquire its directory lock; retry after resolving the storage issue.")
+
+
+def _publish_pending(path: Path, verdict: Verdict) -> None:
+    if not verdict.pending_adjudication_events:
+        return
+    try:
+        for event in verdict.pending_adjudication_events:
+            log_event(path.parent, event)
+        verdict.pending_adjudication_events = []
+        _atomic_write(path, verdict.model_dump_json(indent=2))
+    except (OSError, ValueError):
+        sys.exit("Adjudication saved with pending audit events. Retry adjudication to recover the history; no event is lost.")
+
+
+def _adjudicate_locked(args: argparse.Namespace, path: Path) -> int:
     from datetime import datetime, timezone
 
-    path, v = load_verdict(args)
+    v = Verdict.model_validate_json(path.read_text(encoding="utf-8"))
     now = datetime.now(timezone.utc)
     who = _adjudicator()
     base = {"at": now.isoformat(timespec="seconds"), "adjudicator": who,
             "run_id": v.run_id, "request_id": v.request_id, "note": args.note}
     changed: list[str] = []
+    proposed = []
+    targets = []
 
     if args.finding or args.verdict:
         if not args.judge:
@@ -214,7 +287,12 @@ def cmd_adjudicate(args: argparse.Namespace) -> int:
                 target = next((f for f in review.findings if f.id == ref), None)
             if target is None:
                 sys.exit(f"{review.judge} has no finding {ref!r} (it has {len(review.findings)}).")
-            log_event(path.parent, {**base, "kind": "finding", "review_id": review.review_id,
+            if any(target.id == prior.id for prior, _, _ in targets):
+                sys.exit("A finding can be graded only once in one adjudication command.")
+            targets.append((target, ref, label))
+        # All references and labels are valid before changing state or history.
+        for target, ref, label in targets:
+            proposed.append({**base, "kind": "finding", "review_id": review.review_id,
                                     "judge": review.judge, "config_id": review.config_id,
                                     "finding_id": target.id, "old": target.adjudication, "new": label})
             target.adjudication = label
@@ -222,14 +300,14 @@ def cmd_adjudicate(args: argparse.Namespace) -> int:
             changed.append(f"{review.judge} finding {ref}: {label}")
         if args.verdict:
             old = review.human_review.verdict if review.human_review else None
-            log_event(path.parent, {**base, "kind": "review", "review_id": review.review_id,
+            proposed.append({**base, "kind": "review", "review_id": review.review_id,
                                     "judge": review.judge, "config_id": review.config_id,
                                     "old": old, "new": args.verdict})
             review.human_review = HumanReview(verdict=args.verdict, note=args.note, reviewed_at=now)
             changed.append(f"{review.judge} review: {args.verdict}")
 
     if args.producer_verdict:
-        log_event(path.parent, {**base, "kind": "producer", "old": v.human_verdict, "new": args.producer_verdict})
+        proposed.append({**base, "kind": "producer", "old": v.human_verdict, "new": args.producer_verdict})
         v.human_verdict = args.producer_verdict
         v.human_note = args.note
         v.adjudicated_at = now
@@ -238,7 +316,9 @@ def cmd_adjudicate(args: argparse.Namespace) -> int:
     if not changed:
         sys.exit("Nothing to record. Give --finding, --verdict, or --producer-verdict.")
 
-    path.write_text(v.model_dump_json(indent=2), encoding="utf-8")
+    v.pending_adjudication_events.extend({"event_id": uuid4().hex, **event} for event in proposed)
+    _atomic_write(path, v.model_dump_json(indent=2))
+    _publish_pending(path, v)
     print(f"run {v.run_id}  {path}")
     for c in changed:
         print(f"  {c}")

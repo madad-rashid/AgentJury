@@ -89,16 +89,18 @@ def test_benchmark_explains_unknown_role(tmp_path, monkeypatch, capsys):
 def test_review_explains_missing_openai_package(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setitem(sys.modules, "openai", None)
+    monkeypatch.setenv("AGENTJURY_COMPATIBLE_BASE_URL", "http://127.0.0.1:1234/v1")
     (tmp_path / "task.txt").write_text("Check this", encoding="utf-8")
     (tmp_path / "output.txt").write_text("Answer", encoding="utf-8")
     with pytest.raises(SystemExit, match=r'pip install "agentjury\[openai\]"'):
-        main(["review", "task.txt", "output.txt", "--panel", "accuracy:ollama:local"])
+        main(["review", "task.txt", "output.txt", "--panel", "accuracy:compatible:local"])
 
 
 def test_benchmark_explains_missing_openai_package(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setitem(sys.modules, "openai", None)
-    assert main(["benchmark", "--panel", "accuracy:ollama:local"]) == 5
+    monkeypatch.setenv("AGENTJURY_COMPATIBLE_BASE_URL", "http://127.0.0.1:1234/v1")
+    assert main(["benchmark", "--panel", "accuracy:compatible:local"]) == 5
     assert 'pip install "agentjury[openai]"' in capsys.readouterr().err
 
 
@@ -106,7 +108,7 @@ def test_duplicate_config_stops_before_calls(fake_panels, monkeypatch, capsys):
     monkeypatch.setattr(benchmark, "build_panel", lambda spec: Panel([fake_panels[0], fake_panels[0]]))
     assert main(["benchmark", "--panel", "demo"]) == 5
     assert fake_panels[0].calls == 0
-    assert "duplicate" in capsys.readouterr().err
+    assert "duplicate" in capsys.readouterr().err.lower()
 
 
 def test_progress_and_report_do_not_echo_case_or_key(fake_panels, monkeypatch, capsys):

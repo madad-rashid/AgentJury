@@ -13,6 +13,7 @@ Any agent framework that can produce a ReviewRequest can use AgentJury.
 
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Literal
@@ -22,7 +23,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
-SCHEMA_VERSION = "0.6"
+SCHEMA_VERSION = "0.7"
 
 
 def _now() -> datetime:
@@ -44,6 +45,28 @@ class Artifact(BaseModel):
     name: str
     content: str
     media_type: str = "text/plain"
+    artifact_id: str = Field(default_factory=_new_id)
+    content_sha256: str | None = None
+    coverage: Literal["full", "partial"] = "full"
+
+    @model_validator(mode="after")
+    def _digest(self) -> "Artifact":
+        if self.content_sha256 is None:
+            self.content_sha256 = hashlib.sha256(self.content.encode("utf-8")).hexdigest()
+        return self
+
+
+class ArtifactCoverage(BaseModel):
+    """What was reviewed and whether its unchanged snapshot was annotated."""
+
+    artifact_id: str | None = None
+    name: str
+    content_sha256: str | None = None
+    coverage: Literal["full", "partial", "omitted", "unavailable"]
+    annotation_status: Literal[
+        "not_requested", "applied", "partial", "omitted", "unavailable",
+        "changed", "stale", "write_failed",
+    ] | None = None
 
 
 class Producer(BaseModel):
@@ -98,7 +121,9 @@ class FindingEvidence(BaseModel):
     """Short excerpts used to check the provenance of a judge's finding."""
 
     output_quote: str
-    basis_source: Literal["task", "context", "output", "reviewer_rule"]
+    output_artifact_id: str | None = None
+    basis_source: Literal["task", "context", "output", "artifact", "reviewer_rule"]
+    basis_artifact_id: str | None = None
     basis_quote: str
 
 
@@ -142,6 +167,7 @@ class Review(BaseModel):
         "Ollama and custom compatible endpoints each count as one provider."
     ))
     model: str = Field(description="Underlying model that produced this review.")
+    observed_model: str | None = Field(default=None, description="Model identity reported by the endpoint, if available.")
 
     vote: Vote
     score: float = Field(ge=0, le=10)
@@ -226,6 +252,8 @@ class Verdict(BaseModel):
         )
     )
     reviews: list[Review]
+    artifact_coverage: list[ArtifactCoverage] = Field(default_factory=list)
+    pending_adjudication_events: list[dict[str, Any]] = Field(default_factory=list)
     local_signals: list[LocalSignal] = Field(
         default_factory=list,
         description="Deterministic warnings found in the submitted answer; not judge findings or votes.",

@@ -64,7 +64,7 @@ agentjury review task.md output.md \
 ```
 
 Run `agentjury roles` to see the built-in roles. Every verdict is saved to `.agentjury/verdicts/`.
-Findings must cite short excerpts from the task, context, output, or
+Findings must cite short excerpts from the task, context, output, artifacts, or
 reviewer rule. AgentJury checks each excerpt against that source, allowing
 only whitespace, common quote and dash, and Unicode NFKC differences. If
 a reviewer cannot supply valid excerpts after one repair attempt, its review
@@ -72,10 +72,14 @@ is unavailable and the jury may report `insufficient_jury`. The display marks
 accepted findings `[excerpts checked]`; saved verdicts retain the excerpts
 locally. This check does not prove that a finding interprets an excerpt
 correctly, and reviewers cannot open links in the supplied text.
+Artifact excerpts identify their source by `artifact_id`, so files with the
+same name cannot be confused. Partial artifact coverage is recorded explicitly.
 For tasks that explicitly request a source for a time-sensitive number, the
 `source_audit` role checks for a named publication or document and an as-of
 date. Add it to an explicit panel when citation traceability matters. A model
 may still miss a problem, so compare candidate panels on your own labeled cases.
+`source_audit` checks citation traceability in the supplied text. It does not
+retrieve the source or establish that its contents support the claim.
 
 ### One key or a local model
 
@@ -102,8 +106,11 @@ agentjury review task.md output.md --panel 'accuracy:ollama:qwen3:8b,critic:olla
 ```
 
 Substitute any installed Ollama model. The default endpoint is
-`http://127.0.0.1:11434/v1`; set `AGENTJURY_OLLAMA_BASE_URL` to use another
-Ollama endpoint. Two Ollama judges still count as one provider for diversity.
+`http://127.0.0.1:11434`; set `AGENTJURY_OLLAMA_URL` to use another
+Ollama endpoint. The legacy `AGENTJURY_OLLAMA_BASE_URL` also works; an optional
+trailing `/v1` is removed for the native `/api/chat` route. Native Ollama and
+OpenRouter adapters do not require the OpenAI SDK. Two Ollama judges still
+count as one provider for diversity.
 
 For another OpenAI-compatible chat endpoint, such as LM Studio, set its base
 URL and optionally its API key:
@@ -119,6 +126,21 @@ remote URL. All custom-endpoint judges count as one provider. If the custom
 endpoint URL matches the configured Ollama URL, both routes count as Ollama.
 Panel entries use `role:provider:model` for these routes; the existing
 `role:openai` and `role:anthropic` forms remain valid.
+Short forms `role:ollama` and `role:openrouter` use `AGENTJURY_OLLAMA_MODEL`
+and `AGENTJURY_OPENROUTER_MODEL`, respectively. Repeating an identical reviewer
+configuration in one panel is rejected. Distinct roles remain distinct
+configurations, but do not establish statistical independence.
+
+Adapters reject unfinished completions and known returned-model mismatches.
+Direct vendor aliases may report the same model name with a valid dated
+snapshot suffix; explicit snapshot requests must match exactly.
+Reviews retain the endpoint's `observed_model` separately from configured
+`model`. OpenRouter stores the full requested routing variant in
+`params.requested_model` and uses the canonical vendor/model identity for
+reputation. A custom compatible endpoint may omit model telemetry; that is
+recorded as unknown. These are endpoint reports, not cryptographic model
+attestations. Provider labels and different models are proxies for diversity;
+shared training, infrastructure and correlated mistakes can remain.
 
 ## Compare free juries
 
@@ -175,9 +197,14 @@ only gets `needs_revision` is a missed block. A good answer sent back for
 revision is a false rejection. Unavailable verdicts stay separate from these
 errors. The benchmark suggests a panel only after a complete run with two
 underlying providers, no unsafe approvals, and actionable verdicts on at
-least 80% of cases. Only explicit OpenRouter `:free` and Ollama panels can be
+least 80% of cases. It also requires verification of at least 80% of correct
+cases and every injected case to be blocked, including cases that would
+otherwise be unavailable. An always-revise panel cannot earn a
+recommendation. Only explicit OpenRouter `:free` and Ollama panels can be
 suggested as free. A suggestion is provisional and printed as a `--panel`
 argument for you to choose; normal reviews never switch panels automatically.
+The six starter cases are a smoke test. A passing recommendation is not evidence
+of general accuracy, calibrated confidence or robust prompt-injection resistance.
 
 Your case text goes to the model services you select. Reports stay local and
 ignored by Git; they include model-generated review reasons and findings but
@@ -237,7 +264,10 @@ AgentJury separates generation from verification. Reviewers see the task and out
 
 Judges vote ▲ approve, ▼ revise, or – abstain. Abstentions are recorded but never counted as approval, and they count against quorum.
 
-No single judge can block. `blocked` requires blocking findings from two different providers. One blocking finding downgrades the result to `needs_revision`.
+No single judge can block. In a mixed-provider panel, `blocked` requires blocking
+findings from two different providers. In an intentionally single-provider
+panel, two distinct reviewer configurations with blocking findings can block.
+One blocking reviewer downgrades the result to `needs_revision`.
 
 A local check also looks for explicit commands aimed at the reviewers inside the submitted answer. If the judges would otherwise approve such an answer, AgentJury returns `needs_revision` and prints a separate `Local check` warning with the matching excerpt. The warning is not a judge vote or finding and requires no extra model call.
 
@@ -248,8 +278,13 @@ A panel needs a quorum of voters, by default a strict majority of requested judg
 ```
 
 A panel built from several providers must also hear from at least two of them. Otherwise the status is `insufficient_jury` and the votes are informational only.
+After quorum and provider checks, the majority is calculated among participating,
+non-abstaining voters. A tie needs revision. `verified` means this configured
+jury approved the supplied material; it is not a guarantee of truth or safety.
 
 Each judge call has a timeout, one retry on provider error, and one repair round-trip if the reply is not valid JSON. A failed judge is recorded as an error and the rest of the panel continues.
+These are per-call timeouts, not a hard deadline for the entire panel. Retries,
+repair and slow custom judges can extend total elapsed time.
 
 Exit codes:
 
@@ -277,6 +312,12 @@ agentjury adjudicate 9a9a900dc86b --producer-verdict correct
 ```
 
 Findings are numbered as displayed. Grades are written back into the verdict JSON as current state and appended as events to `adjudications.jsonl` in the same folder. The event log records who changed which finding, from what to what, when, and why.
+All references and labels are validated before a change is saved. A directory
+lock serializes adjudications. The verdict is atomically replaced with pending
+audit events before history publication; event IDs make replay idempotent.
+If publication fails, the CLI reports pending events and a subsequent valid
+adjudication retries them. Verdict and history are recoverable separate files,
+not a single atomic transaction. Do not edit or delete pending events manually.
 
 Set `AGENTJURY_VERDICT_DIR` to avoid repeating `--dir`.
 
@@ -287,6 +328,7 @@ Identity hierarchy:
 - `review_id`: one judge's opinion
 - `config_id`: the reviewer configuration used for future reputation measurement, including provider, model, role, prompt hash, and relevant parameters
 - `finding.id`: one specific issue raised by a reviewer
+- `artifact_id`: one captured file or blob within a request, with coverage and SHA-256 content digest
 
 Verdicts are saved as `<request_id>-<run_id>.json`.
 
@@ -312,7 +354,7 @@ Adapters for other agent frameworks are welcome. See [CONTRIBUTING.md](CONTRIBUT
 
 ## Protocol
 
-Current schema: **0.5**.
+Current schema: **0.7**. Older verdicts remain readable; new fields have defaults.
 
 Print the schemas with:
 

@@ -32,7 +32,8 @@ class Candidate:
     def is_free(self) -> bool:
         return all(
             judge.params.get("route") == "ollama"
-            or (judge.params.get("route") == "openrouter" and judge.model.endswith(":free"))
+            or (judge.params.get("route") == "openrouter"
+                and judge.params.get("requested_model", judge.model).endswith(":free"))
             for judge in self.panel.judges
         )
 
