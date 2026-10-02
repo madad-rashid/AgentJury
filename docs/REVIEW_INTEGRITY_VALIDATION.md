@@ -750,3 +750,31 @@ The full Windows/Python 3.13 offline suite passed **540 tests, 2 skipped** in
 67.93 seconds; the two skipped tests require opt-in live services. Documentation
 links, package manifest requirements, example provenance and demo aggregation
 also passed.
+
+## OpenRouter fixed-model safeguard follow-up - 2026-10-02
+
+After PR #8 merged at `2eed1d7793298b03959d1252540067eaedd9e2bc`, comparison
+with PR #7 (`0ee64059691ec10b2363cc17be31dec61ed190db`) found that integration
+had broadened the fixed-model grammar. For example,
+`google/gemini-2.0-flash-001@preset/your-preset-slug` was accepted at construction
+even though the original native route rejected it. OpenRouter documents combined
+model/preset syntax; presets can alter routing, prompts and generation settings.
+Response validation occurs too late to prevent dispatch with those settings.
+No live call or falsely accepted verdict was needed or observed in this repro.
+
+Native and SDK OpenRouter routes now share a fixed-slug grammar with optional
+colon variants. Direct `CompatibleJudge(route="openrouter")` construction uses
+the same check before client creation. Preset references, router aliases, extra
+path segments and encoded references fail before transport construction.
+Generic compatible and Ollama identifiers keep their existing policy. This is
+syntactic validation, not a live catalog lookup or a guarantee of availability.
+
+The offline regressions reproduced **14 expected failures, 10 passes** before
+implementation. Afterward, **99 focused provider tests passed**, including the
+new pre-transport checks, preserved fixed slugs/variants and unaffected-route
+checks. All model calls remain offline fakes or test-owned loopback servers;
+there is no paid inference or account access. PR #7 remains open pending final
+supersession assessment; this follow-up is separate from merged PR #8.
+The full Windows/Python 3.13 offline suite passed **564 tests, 2 skipped** in
+59.71 seconds. The skips require opt-in live services. Documentation link,
+manifest, example provenance and demo aggregation checks passed.

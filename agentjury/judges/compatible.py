@@ -13,7 +13,7 @@ from .response_validation import OPENROUTER_COMPLETION_POLICY, openrouter_finish
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1"
 OLLAMA_URL = "http://127.0.0.1:11434/v1"
-_MODEL_SLUG = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*/[^\s/][^\s]*\Z")
+_MODEL_SLUG = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9._-]+(?::[A-Za-z0-9._-]+)*\Z")
 
 
 def _base_url(value: str) -> str:
@@ -80,7 +80,7 @@ def _ollama_config_id(judge: Judge) -> str:
 
 def _router_model(model: str) -> str:
     if not isinstance(model, str) or not _MODEL_SLUG.fullmatch(model) or model.split("/", 1)[0].lower() == "openrouter":
-        raise ValueError("OpenRouter model must use a stable vendor/model slug.")
+        raise ValueError("OpenRouter model must use a fixed vendor/model slug; routers and presets are unsupported.")
     return model.split(":", 1)[0]
 
 
@@ -113,6 +113,8 @@ class CompatibleJudge(Judge):
 
     def __init__(self, role: str, model: str, *, route: str, base_url: str,
                  api_key: str | None, provider: str, timeout: float = 60.0):
+        if route == "openrouter":
+            _router_model(model)
         if not model or not model.strip():
             raise ValueError(f"{route} requires an explicit model.")
         url = _base_url(base_url)
