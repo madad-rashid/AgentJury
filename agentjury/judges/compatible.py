@@ -8,7 +8,7 @@ import os
 import re
 from urllib.parse import urlsplit, urlunsplit
 
-from .base import Completion, Judge, prompt_hash
+from .base import Completion, Judge, RUBRIC_VERSION, prompt_hash
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1"
 OLLAMA_URL = "http://127.0.0.1:11434/v1"
@@ -74,7 +74,7 @@ def _ollama_config_id(judge: Judge) -> str:
     if "requested_model" in params:
         params["requested_model"] = _ollama_model(params["requested_model"])
     encoded = json.dumps(params, sort_keys=True, default=str)
-    return prompt_hash(f"{judge.provider}|{_ollama_model(judge.model)}|{judge.role}|{judge.prompt_hash}|{encoded}")
+    return prompt_hash(f"{judge.provider}|{_ollama_model(judge.model)}|{judge.role}|{judge.prompt_hash}|rubric={RUBRIC_VERSION}|{encoded}")
 
 
 def _router_model(model: str) -> str:

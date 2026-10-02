@@ -33,8 +33,10 @@ that do not satisfy the response contract. See [providers](PROVIDERS.md).
 
 Schema 0.7 adds artifact IDs/digests/full-or-partial coverage, verdict coverage,
 observed model telemetry and pending adjudication events. Old verdicts and old
-finding evidence load with default fields. The rubric changes to 0.5, affecting
-prompt/configuration identity and potentially reviewer opinions.
+finding evidence load with default fields. The initial integrity rubric was 0.5; artifact source presentation uses policy
+0.6. All configuration IDs include that policy version, including plain-text
+reviewers. Preserve historical identities and start new benchmark runs. Artifact
+requests use structured JSON sources; plain-text-only prompt format is unchanged.
 
 Artifact findings may set `output_artifact_id`, or `basis_source: "artifact"`
 with `basis_artifact_id`. Other basis sources omit that ID. See the

@@ -63,8 +63,10 @@ publications or verify that a citation supports the claim. Exact excerpt checks
 also do not prove interpretation. The private-credit example is intentionally
 weakly sourced; see [examples](../examples/README.md).
 
-No new live inference was performed for the integrity fixes. Before recommending
-a production panel, use authorized representative labeled tasks, held-out cases,
+The initial integrity fixes were validated offline; later authorized local
+smokes and artifact-source experiments are recorded in the validation report.
+They include a failed artifact-injection probe and do not qualify a production
+panel. Before recommending one, use representative labeled tasks, held-out cases,
 human grading of individual findings, and repeated runs under exact model/route
 identities. Report false approvals, false rejections, abstentions/unavailability,
 blocking recall, cost, latency and shared-error patterns. Model versions may

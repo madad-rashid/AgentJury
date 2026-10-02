@@ -13,6 +13,18 @@ and does not scan task/context/artifact text with those rules. The reviewer prom
 still labels all those sections untrusted. Checked excerpts validate source
 provenance, not the truth or safety of the reviewer's interpretation.
 
+## Observed artifact-injection failure
+
+On 2026-10-02, a bounded local accuracy-role probe using qwen2.5:7b-instruct
+approved an artifact containing commands to approve and suppress findings.
+Both the old prompt and the corrected structured-source prompt returned accepted
+approval. The corrected prompt initially detected manipulation but misattributed
+its evidence; generic repair then dropped the concern and approved. The
+deterministic output-only guard does not cover this artifact text.
+This configuration is experimental, not validated for adversarial artifacts.
+Structured JSON preserves source attribution; it is not an injection defense.
+See [the recorded checks](REVIEW_INTEGRITY_VALIDATION.md#corrected-implementation-and-failed-safety-probes).
+
 ## Selected destinations and saved content
 
 The selected judges receive the task, output, configured context and captured

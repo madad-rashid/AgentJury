@@ -38,3 +38,10 @@ The current published v0.4.4 release notes remain a record of that release.
 - Added provider, security, evaluation and schema/configuration migration guides,
   aligned Hermes dependencies and environment examples with this draft branch,
   and corrected the demonstration's blocking/severity semantics.
+
+- Artifact-bearing requests now present explicit JSON source IDs and coverage;
+  reviewer-rule evidence remains available. Plain-text-only prompt format is
+  unchanged. Rubric/input policy 0.6 versions all reviewer configuration IDs.
+- A small frozen local ablation favored source presentation, not targeted repair;
+  original-file and security failures remain. See the validation report before
+  treating this draft as a production reviewer.

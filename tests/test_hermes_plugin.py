@@ -150,7 +150,11 @@ def test_written_file_becomes_artifact(plugin, tmp_path):
     jury.on_tool_call("write_file", {"path": str(f)}, task_id="s1")
     jury.on_turn_end("s1", "t", "a long enough response here")
     jury.wait(10)
-    assert "ARTIFACT out.md" in seen["user"] and "ARTIFACT BODY" in seen["user"]
+    import json
+    material = json.loads(seen["user"][seen["user"].index("{"):])
+    artifact = material["deliverables"][1]
+    assert artifact["name"] == "out.md" and artifact["text"] == "ARTIFACT BODY"
+    assert artifact["source_id"] == "artifact:" + artifact["artifact_id"]
 
 
 def test_feedback_injected_once_when_not_verified(plugin, tmp_path):
