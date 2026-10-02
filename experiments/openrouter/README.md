@@ -24,7 +24,10 @@ comparison; they do not make low-entropy identifiers anonymous.
 `unsupported_controls` requires an explicit known machine error code in a
 decoded provider response. An HTTP 400 alone is `http_failure`; it is not proof
 that a particular control was unsupported. No error body is read or logged.
-Unknown native finish values still fail the unchanged completion guard.
+Native `completed` now follows the same narrowly qualified OpenRouter/OpenAI
+mapping as the product adapters: requested `openai/...`, observed `OpenAI`,
+normalized `stop`, and all existing guards. It is also a safe diagnostic label.
+Unknown or failed/incomplete native values still fail. See [provider policy](../../docs/PROVIDERS.md).
 
 Run offline checks from the repository root:
 

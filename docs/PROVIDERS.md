@@ -55,6 +55,22 @@ failure once and permits one repair round trip only for unreadable JSON.
 Readable invalid opinion schemas or failed finding evidence are unavailable
 immediately, without repair. A failed judge contributes an error and no vote.
 
+OpenRouter normalizes provider finish labels. Its native and SDK-compatible
+routes accept native `completed` only when the requested vendor is `openai`,
+the observed provider is exactly `OpenAI`, and normalized finish is `stop`.
+All model, choice/error, nonempty-content and usage checks still apply. Missing
+provider metadata, other providers/routes and unknown/failed/incomplete native
+labels do not qualify for this mapping. Generic compatible endpoints retain
+their previous rules. `params.completion_policy=openai-completed-v1` versions
+OpenRouter reviewer identities separately from the unchanged review rubric 0.7.
+
+This mapping is supported by [OpenRouter's normalized/raw finish distinction](https://openrouter.ai/docs/api_reference/overview),
+[OpenAI's generated status schema](https://github.com/openai/openai-python/blob/main/src/openai/types/responses/response_status.py)
+and the actual qualified response in the [single diagnostic call](openrouter-single-diagnostic.md).
+The documents do not enumerate every provider mapping; the specific conjunction
+is a narrowly scoped compatibility inference. Transport completion never proves
+that the opinion, evidence or reviewed output is correct.
+
 Timeouts apply to each call, not the whole panel. Native and compatible routes
 store endpoint identity as a hash. Direct SDK routes do not distinguish
 environment-configured endpoints in their configuration IDs. Configured secrets

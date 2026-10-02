@@ -9,6 +9,7 @@ import re
 from urllib.parse import urlsplit, urlunsplit
 
 from .base import Completion, Judge, RUBRIC_VERSION, prompt_hash
+from .response_validation import OPENROUTER_COMPLETION_POLICY, openrouter_finish_matches
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1"
 OLLAMA_URL = "http://127.0.0.1:11434/v1"
@@ -123,6 +124,8 @@ class CompatibleJudge(Judge):
             "requested_model": model,
             "endpoint_hash": hashlib.sha256(url.encode("utf-8")).hexdigest()[:12],
         }
+        if route == "openrouter":
+            self.params["completion_policy"] = OPENROUTER_COMPLETION_POLICY
         try:
             from openai import DefaultHttpxClient, OpenAI
         except ImportError as exc:
@@ -169,7 +172,11 @@ class CompatibleJudge(Judge):
             choice = choices[0]
             if getattr(choice, "error", None) or getattr(choice, "finish_reason", None) != "stop":
                 raise ValueError("incomplete completion")
-            if getattr(choice, "native_finish_reason", "stop") not in ("stop", "end_turn", "STOP"):
+            native = getattr(choice, "native_finish_reason", "stop")
+            native_ok = (openrouter_finish_matches(self.model, getattr(response, "provider", None),
+                                                  getattr(choice, "finish_reason", None), native)
+                         if self.route == "openrouter" else native in ("stop", "end_turn", "STOP"))
+            if not native_ok:
                 raise ValueError("incomplete native completion")
             content = choice.message.content
             if not isinstance(content, str) or not content.strip():

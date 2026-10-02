@@ -7,6 +7,7 @@ import io, json, time, hashlib
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from urllib.error import HTTPError
+from agentjury.judges.response_validation import openrouter_finish_matches
 MODELS = {'openai/gpt-6.1-sol': ('openai', 'OpenAI'), 'anthropic/claude-sonnet-5.5': ('anthropic', 'Anthropic')}
 RESERVE = Decimal('0.057344')
 CAP = Decimal('3')
@@ -45,7 +46,7 @@ def response_diagnostic(data):
     content = message.get('content') if isinstance(message, dict) else None
     usage = data.get('usage')
     finish = {'stop', 'length', 'tool_calls', 'function_call', 'content_filter', 'error'}
-    native = finish | {'end_turn', 'STOP', 'max_tokens', 'MAX_TOKENS', 'refusal'}
+    native = finish | {'end_turn', 'STOP', 'max_tokens', 'MAX_TOKENS', 'refusal', 'completed'}
     d.update(generation_id=fingerprint(data.get('id')), request_id=fingerprint(data.get('request_id')), observed_model=label(data.get('model'), MODELS), observed_provider=label(data.get('provider'), {'OpenAI', 'Anthropic', 'Azure'}), top_level_error_present=bool(data.get('error')), choices_type=shape(choices), choices_count=len(choices) if isinstance(choices, list) else None, choice_error_present=bool(choice.get('error')), message_type=shape(message), content_type=shape(content), content_nonempty=isinstance(content, str) and bool(content.strip()), usage_type=shape(usage))
     for key, allowed in [('finish_reason', finish), ('native_finish_reason', native)]:
         d[key] = label(choice.get(key), allowed)
@@ -167,7 +168,7 @@ class CappedTransport:
                 reject('choice_error', 'incomplete_completion')
             if choice.get('finish_reason') != 'stop':
                 reject('truncated_completion' if choice.get('finish_reason') == 'length' else 'unexpected_finish_reason', 'incomplete_completion')
-            if choice.get('native_finish_reason', 'stop') not in ('stop', 'end_turn', 'STOP'):
+            if not openrouter_finish_matches(self.model, data.get('provider'), choice.get('finish_reason'), choice.get('native_finish_reason', 'stop')):
                 reject('truncated_completion' if choice.get('native_finish_reason') in ('length', 'max_tokens', 'MAX_TOKENS') else 'unexpected_native_finish_reason', 'incomplete_completion')
             message = choice.get('message')
             content = message.get('content') if isinstance(message, dict) else None

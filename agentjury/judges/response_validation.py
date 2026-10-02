@@ -1,7 +1,24 @@
-"""Model reports accepted by direct vendor adapters."""
+"""Model reports and provider-specific completion normalization."""
 
 import re
 from datetime import date
+
+OPENROUTER_COMPLETION_POLICY = "openai-completed-v1"
+
+
+def openrouter_finish_matches(requested: str, provider: object,
+                             finish: object, native: object) -> bool:
+    """Normalize one observed OpenAI status without trusting unknown providers.
+
+    Call only for the OpenRouter route. Its normalized finish must still be stop;
+    model, choice/error, content and usage checks remain the caller's responsibility.
+    """
+    if finish != "stop":
+        return False
+    if native in ("stop", "end_turn", "STOP"):
+        return True
+    return (native == "completed" and requested.startswith("openai/")
+            and provider == "OpenAI")
 
 
 def direct_model_matches(requested: str, observed: object, *, compact_date: bool = False) -> bool:

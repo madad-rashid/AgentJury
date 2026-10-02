@@ -9,6 +9,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from .base import Completion, Judge
 from .compatible import _base_url, _response_id, _router_model, _router_model_matches, _sanitized_error, _token_count
+from .response_validation import OPENROUTER_COMPLETION_POLICY, openrouter_finish_matches
 
 API_URL = "https://openrouter.ai/api/v1/chat/completions"
 
@@ -39,7 +40,8 @@ class OpenRouterJudge(Judge):
         self._opener = build_opener(_NoRedirect())
         self.params = {"route": "openrouter", "transport": "openrouter",
                        "endpoint_hash": hashlib.sha256(self._api_url.encode()).hexdigest()[:12],
-                       "requested_model": requested}
+                       "requested_model": requested,
+                       "completion_policy": OPENROUTER_COMPLETION_POLICY}
 
     @property
     def name(self) -> str:
@@ -67,7 +69,8 @@ class OpenRouterJudge(Judge):
             choice = choices[0]
             message = choice.get("message")
             if (choice.get("error") or choice.get("finish_reason") != "stop"
-                    or choice.get("native_finish_reason", "stop") not in ("stop", "end_turn", "STOP")
+                    or not openrouter_finish_matches(self._requested_model, data.get("provider"),
+                                                     choice.get("finish_reason"), choice.get("native_finish_reason", "stop"))
                     or not isinstance(message, dict) or not isinstance(message.get("content"), str)
                     or not message["content"].strip()):
                 raise ValueError("incomplete chat message")
