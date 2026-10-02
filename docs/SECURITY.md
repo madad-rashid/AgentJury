@@ -25,6 +25,19 @@ This configuration is experimental, not validated for adversarial artifacts.
 Structured JSON preserves source attribution; it is not an injection defense.
 See [the recorded checks](REVIEW_INTEGRITY_VALIDATION.md#corrected-implementation-and-failed-safety-probes).
 
+## Syntax-only repair boundary
+
+Review policy 0.7 stops immediately when readable JSON fails the opinion schema
+or a parsed opinion fails evidence validation. The unavailable judge contributes
+an error, not a trusted finding or blocking vote. Only unreadable JSON gets one
+retry; raw concerns in unreadable text are not semantically preserved. This
+closes the recorded evidence-invalid concern followed by repaired approval.
+It does not detect direct unsafe approvals. In fresh local held-out probes,
+both baseline and candidate directly approved a forged-authority artifact;
+both falsely revised an inert quoted training example. A remaining independent
+quorum can still verify when one judge is unavailable. Keep this configuration
+experimental. See [measured limitations](REVIEW_INTEGRITY_VALIDATION.md#syntax-only-repair-boundary---2026-10-02).
+
 ## Selected destinations and saved content
 
 The selected judges receive the task, output, configured context and captured

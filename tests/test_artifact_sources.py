@@ -90,7 +90,7 @@ def test_new_input_policy_has_a_distinct_reviewer_configuration():
     params = json.dumps({'timeout': judge.timeout, **judge.params}, sort_keys=True, default=str)
     old_id = prompt_hash(f'{judge.provider}|{judge.model}|{judge.role}|{judge.prompt_hash}|{params}')
     assert judge.config_id != old_id
-    assert judge.review(ReviewRequest(task='Check.', output='Done.')).rubric_version == '0.6'
+    assert judge.review(ReviewRequest(task='Check.', output='Done.')).rubric_version == '0.7'
 
 
 def test_native_ollama_identity_versions_the_artifact_input_policy():

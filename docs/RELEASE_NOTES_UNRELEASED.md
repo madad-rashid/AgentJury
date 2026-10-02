@@ -45,3 +45,10 @@ The current published v0.4.4 release notes remain a record of that release.
 - A small frozen local ablation favored source presentation, not targeted repair;
   original-file and security failures remain. See the validation report before
   treating this draft as a production reviewer.
+
+- Review policy 0.7 permits one retry only for unreadable JSON. Readable invalid
+  opinion schemas or failed evidence produce an unavailable judge without
+  trusting invalid findings or allowing a second opinion to erase them.
+- Recorded injection-to-approval repair regression is covered offline. Fresh
+  local probes still show direct injected-artifact approval and false revision
+  of an inert quotation; this is not general prompt-injection resistance.

@@ -58,26 +58,26 @@ def test_valid_evidence_is_saved_with_neutral_reason():
     assert judge.calls == 1
 
 
-def test_invalid_first_response_uses_one_repair():
+def test_evidence_invalid_first_response_is_unavailable_without_repair():
     judge = ScriptedJudge([opinion(), opinion(evidence=VALID_EVIDENCE)])
-    review = judge.review(REQUEST)
-    assert review.vote == Vote.REVISE
-    assert judge.calls == 2
+    with pytest.raises(ValueError, match="evidence.*initial opinion"):
+        judge.review(REQUEST)
+    assert judge.calls == 1
 
 
-def test_invalid_evidence_fails_after_one_repair_without_echoing_claim():
+def test_invalid_evidence_fails_without_repair_or_echoing_claim():
     judge = ScriptedJudge([opinion(), opinion()])
     with pytest.raises(ValueError, match="evidence") as failure:
         judge.review(REQUEST)
     assert "Model-invented" not in str(failure.value)
-    assert judge.calls == 2
+    assert judge.calls == 1
 
 
 def test_revise_without_findings_cannot_bypass_evidence_gate():
     judge = ScriptedJudge([opinion(findings=False), opinion(findings=False)])
     with pytest.raises(ValueError, match="evidence"):
         judge.review(REQUEST)
-    assert judge.calls == 2
+    assert judge.calls == 1
 
 
 def test_approve_reason_does_not_repeat_model_claim():

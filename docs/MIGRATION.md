@@ -34,7 +34,8 @@ that do not satisfy the response contract. See [providers](PROVIDERS.md).
 Schema 0.7 adds artifact IDs/digests/full-or-partial coverage, verdict coverage,
 observed model telemetry and pending adjudication events. Old verdicts and old
 finding evidence load with default fields. The initial integrity rubric was 0.5; artifact source presentation uses policy
-0.6. All configuration IDs include that policy version, including plain-text
+0.6; syntax-only repair uses policy 0.7. All configuration IDs include that
+policy version, including plain-text
 reviewers. Preserve historical identities and start new benchmark runs. Artifact
 requests use structured JSON sources; plain-text-only prompt format is unchanged.
 
@@ -66,3 +67,9 @@ Adjudication validates all references, serializes writers and persists recoverab
 pending events before updating history. If publication fails, retain the verdict
 and JSONL log and retry a valid adjudication after fixing storage. Event IDs avoid
 duplicate history. Do not manually delete pending events. See [security](SECURITY.md).
+
+
+Readable JSON opinions that fail schema or evidence validation now become
+unavailable without a second model opinion. Only unreadable JSON retains a
+single retry. Existing evidence/quorum rules are unchanged. Start new benchmark
+runs with the new identities; an old run cannot silently resume under policy 0.7.

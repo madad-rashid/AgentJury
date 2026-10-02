@@ -64,7 +64,7 @@ def test_benchmark_report_omits_checked_excerpts(tmp_path):
     assert "secret-context-marker" not in json.dumps(saved)
 
 
-def test_invalid_evidence_is_sanitized_and_uses_existing_repair_budget(tmp_path):
+def test_invalid_evidence_is_sanitized_and_consumes_only_initial_call(tmp_path):
     bad = json.dumps({
         "vote": "revise", "score": 3, "reason": "secret-reason-marker",
         "findings": [{"text": "secret-finding-marker", "severity": "major"}],
@@ -75,7 +75,7 @@ def test_invalid_evidence_is_sanitized_and_uses_existing_repair_budget(tmp_path)
     saved = report["jobs"][job_key(case, judge)]
     assert "review" not in saved
     assert saved["error"] == "ValueError"
-    assert report["calls_total"] == 2
+    assert report["calls_total"] == 1
     assert "secret-" not in json.dumps(report)
 
 

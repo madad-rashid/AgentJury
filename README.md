@@ -79,8 +79,9 @@ Run `agentjury roles` to see the built-in roles. Every verdict is saved to `.age
 Findings must cite short excerpts from the task, context, output, artifacts, or
 reviewer rule. AgentJury checks each excerpt against that source, allowing
 only whitespace, common quote and dash, and Unicode NFKC differences. If
-a reviewer cannot supply valid excerpts after one repair attempt, its review
-is unavailable and the jury may report `insufficient_jury`. The display marks
+a parsed review has invalid evidence or its readable JSON fails the opinion
+schema, that judge is unavailable immediately. Only unreadable JSON gets one
+retry. The jury may report `insufficient_jury`. The display marks
 accepted findings `[excerpts checked]`; saved verdicts retain the excerpts
 locally. This check does not prove that a finding interprets an excerpt
 correctly, and reviewers cannot open links in the supplied text.

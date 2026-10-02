@@ -22,7 +22,7 @@ from typing import Any
 from ..protocol import Finding, FindingEvidence, Review, ReviewRequest, Severity, Vote
 from .evidence import REVIEWER_RULE, validate_evidence
 
-RUBRIC_VERSION = "0.6"
+RUBRIC_VERSION = "0.7"
 
 # ---------------------------------------------------------------------------
 # Roles: what each judge is looking for
@@ -211,17 +211,39 @@ def prompt_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:12]
 
 
+class OpinionSchemaError(ValueError):
+    """Readable JSON does not satisfy the opinion schema; do not repair it."""
+
+
 def parse_opinion(raw: str) -> JudgeOpinion:
     """Pull a JSON object out of model output, tolerating code fences and chatter."""
     text = raw.strip()
     text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text, flags=re.MULTILINE).strip()
-    start, end = text.find("{"), text.rfind("}")
-    if start == -1 or end == -1:
-        raise ValueError(f"No JSON object found in judge response:\n{raw}")
     try:
-        return JudgeOpinion.model_validate(json.loads(text[start : end + 1]))
-    except (json.JSONDecodeError, ValidationError) as exc:
-        raise ValueError(f"Judge returned malformed JSON: {exc}\n---\n{raw}") from exc
+        value = json.loads(text)
+    except json.JSONDecodeError:
+        # Preserve compatibility with fenced/chattering replies. A readable
+        # wrong-root JSON value must never fall back to an embedded object.
+        start = re.search(r'[\[{]|(?m:^[ \t]*(?:null\b|true\b|false\b|-?\d|"))', text)
+        if start is None:
+            raise ValueError("Judge returned unreadable JSON.") from None
+        candidate = text[start.start():].lstrip()
+        if candidate[0] in "[{":
+            closing = "]" if candidate[0] == "[" else "}"
+            end = candidate.rfind(closing)
+            if end == -1:
+                raise ValueError("Judge returned unreadable JSON.") from None
+            candidate = candidate[:end + 1]
+        else:
+            candidate = candidate.splitlines()[0]
+        try:
+            value = json.loads(candidate)
+        except json.JSONDecodeError:
+            raise ValueError("Judge returned unreadable JSON.") from None
+    try:
+        return JudgeOpinion.model_validate(value)
+    except ValidationError:
+        raise OpinionSchemaError("Judge opinion schema invalid; review unavailable.") from None
 
 
 # ---------------------------------------------------------------------------
@@ -241,7 +263,7 @@ class Completion:
 
 
 REPAIR_TEMPLATE = (
-    "Your previous reply had invalid JSON or unsupported finding evidence. "
+    "Your previous reply had invalid JSON syntax. "
     "Reply again with ONLY the JSON object described in your instructions. "
     "Every finding needs output and basis excerpts of at most 240 characters "
     "after whitespace normalization. No prose or code fences."
@@ -260,8 +282,9 @@ class Judge(ABC):
     """One reviewer: a role plus a model that plays it.
 
     Failure policy: `timeout` seconds per call (enforced by the provider client),
-    one retry on any provider error, one repair round-trip if the reply is not
-    valid JSON, then the judge is marked failed and the Panel records the error.
+    one retry on any provider error, one repair round-trip for unreadable JSON.
+    Readable invalid schemas and failed evidence are unavailable, without repair;
+    the Panel records the validation failure rather than a vote or finding.
     """
 
     provider: str = "unknown"
@@ -312,24 +335,34 @@ class Judge(ABC):
         completion = self._complete_with_retry(self.system_prompt, user)
         tokens_in, tokens_out = completion.tokens_in, completion.tokens_out
 
-        def parse_checked(raw: str) -> JudgeOpinion:
-            opinion = parse_opinion(raw)
-            if self.requires_evidence:
-                validate_evidence(opinion.vote, [f.evidence for f in opinion.findings], request)
-            return opinion
-
+        phase = "initial opinion"
         try:
-            opinion = parse_checked(completion.text)
+            opinion = parse_opinion(completion.text)
+        except OpinionSchemaError:
+            raise
         except ValueError:
-            # One repair attempt for malformed JSON or unsupported evidence.
+            # Syntax recovery cannot certify an evidence-invalid opinion.
             repair = user + "\n\n" + REPAIR_TEMPLATE
             completion = self._complete_with_retry(self.system_prompt, repair)
+            phase = "JSON retry"
             try:
-                opinion = parse_checked(completion.text)
+                opinion = parse_opinion(completion.text)
+            except OpinionSchemaError:
+                raise
             except ValueError:
-                raise ValueError("Judge returned invalid JSON or finding evidence.") from None
+                raise ValueError("Judge returned unreadable JSON after JSON retry.") from None
             tokens_in = (tokens_in or 0) + (completion.tokens_in or 0)
             tokens_out = (tokens_out or 0) + (completion.tokens_out or 0)
+
+        if self.requires_evidence:
+            try:
+                validate_evidence(opinion.vote, [f.evidence for f in opinion.findings], request)
+            except ValueError:
+                # An unsupported concern is neither a trusted blocking finding
+                # nor a reason to ask for a new opinion that can erase it.
+                raise ValueError(
+                    f"Judge finding evidence failed validation ({phase}); review unavailable."
+                ) from None
 
         latency_ms = int((time.perf_counter() - started) * 1000)
         findings = [Finding(text=f.text, severity=f.severity, evidence=f.evidence) for f in opinion.findings]

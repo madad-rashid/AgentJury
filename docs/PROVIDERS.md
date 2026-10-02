@@ -51,8 +51,9 @@ unknown, rather than asserted to be observed.
 All built-in adapters reject empty or unfinished completions, known model
 mismatches and invalid token/response-ID telemetry before constructing a review.
 Redirects and hidden SDK retries are disabled. Shared `Judge` retries provider
-failure once and makes one repair round trip for malformed JSON or unsupported
-finding evidence. A failed judge contributes an error and no vote.
+failure once and permits one repair round trip only for unreadable JSON.
+Readable invalid opinion schemas or failed finding evidence are unavailable
+immediately, without repair. A failed judge contributes an error and no vote.
 
 Timeouts apply to each call, not the whole panel. Native and compatible routes
 store endpoint identity as a hash. Direct SDK routes do not distinguish
