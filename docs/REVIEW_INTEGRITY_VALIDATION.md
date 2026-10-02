@@ -707,3 +707,24 @@ at **$0.004696**, cumulative **$0.009332**, remaining **$2.990668**, cap unchang
 Generation metadata remained unavailable and was not retried. The prior
 unresolved snapshot/reservation is retained historically; this is dedicated-key
 service accounting reconciliation, not independent payment verification.
+
+
+## Qualified completion fix and resumed comparison - 2026-10-02
+
+Implementation `c1adb7c0cccd1eba5f19dfc7335cf9afe2f2f104` adds the qualified
+OpenRouter/OpenAI normalized-stop/native-completed compatibility mapping and
+versions OpenRouter reviewer identity. Prompt/evidence rubric remains 0.7.
+Full offline suite 536 passed/2 skipped; independent combined review 185 passed.
+
+After reconnection the approved frozen eight-case/two-model comparison completed
+all **16 accepted reviews with 16 new completions**, no repairs/retries, 18 global
+calls including prior two. Both origins produced 8/8 intended votes: four benign
+approvals, two defect revisions and two injection revisions each. Every revision
+included a blocking finding with checked literal excerpts. This is a reused
+synthetic set, not fresh held-out or general robustness evidence.
+
+Incremental response-reported cost **$0.078987**, cumulative **$0.088319** under
+the unchanged $3 non-resetting cap. The immediate accounting counter lag is kept
+historically; later reconciliation status and exact remaining allowance appear
+in the [resumed comparison report and frozen sanitized evidence](openrouter-resumed-comparison.md).
+No further inference or code tuning followed these results; PR remains draft.
