@@ -93,3 +93,12 @@ scope, truncated and omitted artifacts, stale approval, evidence compatibility,
 model aliases/variants, redirects and exception sanitization, duplicate config
 corroboration, audit-write interruption/recovery, denominator thresholds and
 existing CLI/Hermes behavior. No live model calls are permitted.
+
+## Publication follow-up
+
+After local commit `f88bc49`, the user explicitly authorized pushing this branch,
+opening a draft consolidation PR, updating relevant documentation and leaving
+cross-reference comments on PRs 5/6/7. Verify the remote head and monitor the full
+CI matrix for that exact revision, fixing relevant failures without rewriting
+shared history. Existing PRs stay open. Merge, release/deployment and live-model
+calls remain outside this authorization.

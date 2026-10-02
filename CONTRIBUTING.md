@@ -145,6 +145,10 @@ The Hermes adapter in `integrations/hermes/` is the reference integration.
 
 ## Testing expectations
 
+Use the [provider contracts](docs/PROVIDERS.md), [security boundaries](docs/SECURITY.md)
+and [evaluation rules](docs/EVALUATION.md) when changing adapters or the process.
+See [migration](docs/MIGRATION.md) before comparing older saved runs.
+
 For behavior changes, add or update tests that show the intended behavior and the failure case being fixed.
 
 Important invariants include:

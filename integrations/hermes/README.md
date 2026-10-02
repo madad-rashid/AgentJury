@@ -24,9 +24,9 @@ The home directory is the one containing Hermes's `config.yaml` and `.env`
 (on Windows often `%LOCALAPPDATA%\hermes`, on Linux/macOS usually `~/.hermes`).
 
 1. Install AgentJury and the judge SDKs into Hermes's Python. If the venv was made by `uv`:
-   `uv pip install --python <hermes-venv>/Scripts/python.exe git+https://github.com/madad-rashid/AgentJury openai anthropic`
+   `uv pip install --python <hermes-venv>/Scripts/python.exe "agentjury[all] @ git+https://github.com/madad-rashid/AgentJury.git@fix/review-integrity"`
    otherwise `<hermes-python> -m pip install ...` with the same packages.
-2. Link or copy this folder to `<hermes-home>/plugins/agentjury/`
+2. Link or copy this folder from the same branch to `<hermes-home>/plugins/agentjury/`
    (Windows: `mklink /J <hermes-home>\plugins\agentjury <path-to-this-folder>`).
 3. Add `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, and `ANTHROPIC_WORKSPACE_ID` if your key needs it,
    to `<hermes-home>/.env`.
@@ -36,6 +36,14 @@ The home directory is the one containing Hermes's `config.yaml` and `.env`
    Troubleshoot with `hermes logs --level INFO | findstr /i agentjury` (Windows) or `| grep -i agentjury`.
 
 ## Configure
+
+This integration requires the matching schema 0.7 draft core; copying this
+folder while retaining the older PyPI package will not work. Its manifest
+temporarily points to `fix/review-integrity` and installs the vendor SDKs for
+the default panel. Replace the branch reference with the actual released
+package requirement when these changes are released. Native-only core routes
+do not themselves require either SDK. See [migration](../../docs/MIGRATION.md)
+and [providers](../../docs/PROVIDERS.md) for defaults and compatibility.
 
 In `<hermes-home>/config.yaml`:
 

@@ -1,7 +1,7 @@
 # AgentJury — unreleased branch changes
 
-These changes integrate the draft provider and free-jury branches locally and
-have not been published to PyPI.
+These changes consolidate the draft provider and free-jury branches on
+`fix/review-integrity`. They have not been merged or published to PyPI.
 The current published v0.4.4 release notes remain a record of that release.
 
 - Added OpenRouter, Ollama, and generic OpenAI-compatible provider routes.
@@ -35,3 +35,6 @@ The current published v0.4.4 release notes remain a record of that release.
   to direct OpenAI/Anthropic SDK adapters too. SDK redirects are disabled.
   Development extras include SDKs for realistic offline response-shape tests;
   native transports still have no SDK runtime dependency.
+- Added provider, security, evaluation and schema/configuration migration guides,
+  aligned Hermes dependencies and environment examples with this draft branch,
+  and corrected the demonstration's blocking/severity semantics.

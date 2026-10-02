@@ -15,7 +15,7 @@ Exit codes: 0 verified, 1 needs_revision, 2 blocked, 3 insufficient_jury.
 TASK and OUTPUT are files (or "-" to read OUTPUT from stdin).
 PANEL is a comma-separated list of role:provider[:model] entries, for example
     accuracy:openai,critic:openrouter:anthropic/claude-sonnet-4
-Every verdict is saved to .agentjury/verdicts/<request_id>.json so that
+Every verdict is saved to .agentjury/verdicts/<request_id>-<run_id>.json so that
 reviews accumulate over time.
 """
 

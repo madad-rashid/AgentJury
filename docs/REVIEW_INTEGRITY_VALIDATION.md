@@ -1,7 +1,9 @@
 # Local integrity fixes and validation
 
-This work integrates draft PRs 5, 6 and 7 on the isolated local branch
-`fix/review-integrity`. It is not pushed, merged, released or deployed.
+This work integrates draft PRs 5, 6 and 7 on `fix/review-integrity` for a draft
+consolidation pull request. It is not merged, released or deployed. Local fix
+commit: `f88bc49eb6771ae10ce08f1efc33ccf32faea28c`; subsequent documentation
+and any CI fixes are separately visible in the branch history.
 The package version remains 0.4.4 for local validation; schema is 0.7 and
 reviewer rubric is 0.5. Choose a new unused package version before publication.
 
@@ -16,7 +18,8 @@ reviewer rubric is 0.5. Choose a new unused package version before publication.
 
 PR 5 supplies grounded findings, source audit, local reviewer warnings and the
 benchmark. Native provider transports from PRs 6/7 are integrated through its
-shared panel parser. Existing remote branches and PRs remain unchanged.
+shared panel parser. Existing implementation branches and PRs remain open;
+cross-reference comments link them to the consolidation without closing or merging.
 
 ## Fixed defects
 
@@ -89,6 +92,9 @@ Adjudication uses recoverable separate files, not one multi-file transaction.
 
 Hard whole-panel deadlines, task-lineage feedback, privacy routing and measured
 correlation/reputation/confidence calibration remain separate design work.
-Linux and other Python versions were not rerun locally; their configured CI
-matrix needs an approved push. Remote publication and live-model validation
-require separate authorization.
+Linux and other Python versions were not rerun locally; the draft pull request's
+configured CI matrix supplies those checks. Their exact outcome belongs to that
+revision's GitHub checks rather than these historical local test counts.
+Publication of a draft PR was separately authorized after the local fix commit.
+Merging, release/deployment and live-model validation remain separately authorized
+actions. No new live-model validation follows from publishing this branch.

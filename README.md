@@ -33,6 +33,18 @@ Open an issue at <https://github.com/madad-rashid/AgentJury/issues>. Please do n
 
 ## Quick start
 
+The PyPI quick start below uses the published package. Native providers,
+benchmark and integrity changes described here are on the draft
+`fix/review-integrity` branch. To test the combined changes before a release:
+
+```bash
+pip install "agentjury[all] @ git+https://github.com/madad-rashid/AgentJury.git@fix/review-integrity"
+```
+
+Use the matching plugin folder from that branch for Hermes. See the
+[migration guide](docs/MIGRATION.md), [provider guide](docs/PROVIDERS.md),
+[security boundaries](docs/SECURITY.md) and [evaluation guide](docs/EVALUATION.md).
+
 Install AgentJury from PyPI:
 
 ```bash
@@ -83,8 +95,8 @@ retrieve the source or establish that its contents support the claim.
 
 ### One key or a local model
 
-OpenRouter and local-model support is available in the repository checkout. Until
-the next PyPI release, install that checkout with `pip install -e ".[all]"`.
+OpenRouter and local-model support is available on the draft branch described
+above. From a checkout of that branch, install with `pip install -e ".[all]"`.
 [OpenRouter](https://openrouter.ai/docs/quickstart) needs one
 `OPENROUTER_API_KEY` even when the panel uses models from different vendors:
 
@@ -376,6 +388,8 @@ Every field needed by the planned reputation system is recorded from the first r
 See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup, tests, judge-provider adapters, framework integrations, and pull requests.
 
 See [docs/PUBLISHING.md](docs/PUBLISHING.md) for the release and PyPI checklist.
+See [docs/REVIEW_INTEGRITY_VALIDATION.md](docs/REVIEW_INTEGRITY_VALIDATION.md)
+for exact input commits, regression results and the limits of this review.
 
 ## Status
 
