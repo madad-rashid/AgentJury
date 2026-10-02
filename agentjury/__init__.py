@@ -5,6 +5,7 @@ from .panel import Panel
 from .protocol import (
     SCHEMA_VERSION,
     Artifact,
+    ArtifactCoverage,
     Finding,
     HumanReview,
     Producer,
@@ -17,6 +18,6 @@ from .protocol import (
 __version__ = "0.4.4"
 
 __all__ = [
-    "SCHEMA_VERSION", "Artifact", "Finding", "HumanReview", "Producer",
+    "SCHEMA_VERSION", "Artifact", "ArtifactCoverage", "Finding", "HumanReview", "Producer",
     "Review", "ReviewRequest", "Verdict", "Vote", "Panel", "aggregate",
 ]

@@ -4,15 +4,16 @@ The AgentJury protocol. Schema version is SCHEMA_VERSION below.
     ReviewRequest  ->  [Judge, Judge, Judge]  ->  [Review, Review, Review]  ->  Verdict
 
 Every field that reputation will later need is captured from the first review:
-who produced the output, who judged it, with which prompt, at what cost, and
-a slot for a human to adjudicate each finding. Reputation weighting is not
-active yet; the data for it is.
+who produced the output, who judged it, through which route, with which prompt,
+at what cost, and a slot for a human to adjudicate each finding. Reputation
+weighting is not active yet; the data for it is.
 
 Any agent framework that can produce a ReviewRequest can use AgentJury.
 """
 
 from __future__ import annotations
 
+import hashlib
 from datetime import datetime, timezone
 from enum import Enum
 from typing import Literal
@@ -22,7 +23,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, model_validator
 
-SCHEMA_VERSION = "0.5"
+SCHEMA_VERSION = "0.7"
 
 
 def _now() -> datetime:
@@ -44,6 +45,30 @@ class Artifact(BaseModel):
     name: str
     content: str
     media_type: str = "text/plain"
+    artifact_id: str = Field(default_factory=_new_id)
+    content_sha256: str | None = None
+    coverage: Literal["full", "partial"] = "full"
+
+    @model_validator(mode="after")
+    def _digest(self) -> "Artifact":
+        # A full artifact's identity is derived from the supplied text. Partial
+        # artifacts may carry the digest of the full source, not the excerpt.
+        if self.coverage == "full" or self.content_sha256 is None:
+            self.content_sha256 = hashlib.sha256(self.content.encode("utf-8")).hexdigest()
+        return self
+
+
+class ArtifactCoverage(BaseModel):
+    """What was reviewed and whether its unchanged snapshot was annotated."""
+
+    artifact_id: str | None = None
+    name: str
+    content_sha256: str | None = None
+    coverage: Literal["full", "partial", "omitted", "unavailable"]
+    annotation_status: Literal[
+        "not_requested", "applied", "partial", "omitted", "unavailable",
+        "changed", "stale", "write_failed",
+    ] | None = None
 
 
 class Producer(BaseModel):
@@ -94,6 +119,16 @@ Severity = Literal["minor", "major", "blocking"]
 Adjudication = Literal["correct", "partially_correct", "wrong"]
 
 
+class FindingEvidence(BaseModel):
+    """Short excerpts used to check the provenance of a judge's finding."""
+
+    output_quote: str
+    output_artifact_id: str | None = None
+    basis_source: Literal["task", "context", "output", "artifact", "reviewer_rule"]
+    basis_artifact_id: str | None = None
+    basis_quote: str
+
+
 class Finding(BaseModel):
     """One specific problem a judge raised. Adjudicated individually by a human,
     so a review with five findings and one mistake keeps credit for four."""
@@ -101,6 +136,7 @@ class Finding(BaseModel):
     id: str = Field(default_factory=lambda: uuid4().hex[:8])
     text: str
     severity: Severity = "minor"
+    evidence: FindingEvidence | None = None
     adjudication: Adjudication | None = Field(
         default=None, description="Set by a human later. None means not yet reviewed."
     )
@@ -128,8 +164,12 @@ class Review(BaseModel):
     )
     judge: str = Field(description="Display name, e.g. 'critic/anthropic'.")
     role: str = Field(description="Judge role, e.g. 'critic'.")
-    provider: str = Field(description="e.g. 'openai', 'anthropic', 'fake'.")
+    provider: str = Field(description=(
+        "Underlying model vendor when known, e.g. 'openai' or 'anthropic'. "
+        "Ollama and custom compatible endpoints each count as one provider."
+    ))
     model: str = Field(description="Underlying model that produced this review.")
+    observed_model: str | None = Field(default=None, description="Model identity reported by the endpoint, if available.")
 
     vote: Vote
     score: float = Field(ge=0, le=10)
@@ -148,7 +188,10 @@ class Review(BaseModel):
     prompt_hash: str = Field(description="Hash of the exact system prompt sent to the judge.")
     params: dict[str, Any] = Field(
         default_factory=dict,
-        description="Model parameters that affect behaviour: effort, thinking, max_tokens, temperature...",
+        description=(
+            "Model parameters and non-secret route identity that affect behaviour: "
+            "effort, thinking, max_tokens, route, endpoint_hash..."
+        ),
     )
     latency_ms: int | None = None
     tokens_in: int | None = None
@@ -162,6 +205,13 @@ class Review(BaseModel):
     def _derive_blocking(self) -> "Review":
         self.blocking = any(f.severity == "blocking" for f in self.findings)
         return self
+
+
+class LocalSignal(BaseModel):
+    """A deterministic warning about instructions aimed at jury reviewers."""
+
+    rule_id: Literal["force_approval", "score_override", "suppress_findings"]
+    excerpt: str
 
 
 class Verdict(BaseModel):
@@ -204,6 +254,16 @@ class Verdict(BaseModel):
         )
     )
     reviews: list[Review]
+    artifact_coverage: list[ArtifactCoverage] = Field(default_factory=list)
+    pending_adjudication_events: list[dict[str, Any]] = Field(default_factory=list)
+    local_signals: list[LocalSignal] = Field(
+        default_factory=list,
+        description="Deterministic warnings found in the submitted answer; not judge findings or votes.",
+    )
+    local_guard_applied: bool = Field(
+        default=False,
+        description="True only when a local warning changed verified to needs_revision.",
+    )
     errors: list[str] = Field(
         default_factory=list, description="Judges that failed to return a review, with the reason."
     )

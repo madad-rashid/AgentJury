@@ -1,8 +1,8 @@
 # AgentJury for Hermes
 
 Every substantial Hermes response is peer-reviewed by an independent panel of
-AI judges. Verdicts are saved, written into the frontmatter of any markdown
-notes Hermes produced that turn, and, if the panel asked for revisions, fed
+AI judges. Verdicts are saved, written into the frontmatter of eligible markdown
+snapshots Hermes produced that turn, and, if revision is needed, fed
 back to Hermes at the start of the next turn.
 
 ```
@@ -24,9 +24,9 @@ The home directory is the one containing Hermes's `config.yaml` and `.env`
 (on Windows often `%LOCALAPPDATA%\hermes`, on Linux/macOS usually `~/.hermes`).
 
 1. Install AgentJury and the judge SDKs into Hermes's Python. If the venv was made by `uv`:
-   `uv pip install --python <hermes-venv>/Scripts/python.exe git+https://github.com/madad-rashid/AgentJury openai anthropic`
+   `uv pip install --python <hermes-venv>/Scripts/python.exe "agentjury[all] @ git+https://github.com/madad-rashid/AgentJury.git@fix/review-integrity"`
    otherwise `<hermes-python> -m pip install ...` with the same packages.
-2. Link or copy this folder to `<hermes-home>/plugins/agentjury/`
+2. Link or copy this folder from the same branch to `<hermes-home>/plugins/agentjury/`
    (Windows: `mklink /J <hermes-home>\plugins\agentjury <path-to-this-folder>`).
 3. Add `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, and `ANTHROPIC_WORKSPACE_ID` if your key needs it,
    to `<hermes-home>/.env`.
@@ -36,6 +36,14 @@ The home directory is the one containing Hermes's `config.yaml` and `.env`
    Troubleshoot with `hermes logs --level INFO | findstr /i agentjury` (Windows) or `| grep -i agentjury`.
 
 ## Configure
+
+This integration requires the matching schema 0.7 draft core; copying this
+folder while retaining the older PyPI package will not work. Its manifest
+temporarily points to `fix/review-integrity` and installs the vendor SDKs for
+the default panel. Replace the branch reference with the actual released
+package requirement when these changes are released. Native-only core routes
+do not themselves require either SDK. See [migration](../../docs/MIGRATION.md)
+and [providers](../../docs/PROVIDERS.md) for defaults and compatibility.
 
 In `<hermes-home>/config.yaml`:
 
@@ -54,6 +62,67 @@ plugins:
         sidecar: true
         feedback: true
 ```
+
+The `panel` setting also accepts explicit `role:provider:model` entries.
+For an OpenRouter-only panel, install the current AgentJury repository checkout
+into Hermes's Python environment, set `OPENROUTER_API_KEY` in Hermes's `.env`,
+and use:
+
+```yaml
+panel: "accuracy:openrouter:openai/gpt-4o,critic:openrouter:anthropic/claude-sonnet-4"
+```
+
+For a local Ollama server with `qwen3:8b` installed, use:
+
+```yaml
+panel: "accuracy:ollama:qwen3:8b,critic:ollama:qwen3:8b"
+```
+
+Ollama defaults to `http://127.0.0.1:11434`; set
+`AGENTJURY_OLLAMA_URL` in Hermes's environment to change it. The legacy
+`AGENTJURY_OLLAMA_BASE_URL` is accepted, including a trailing `/v1`. For another
+OpenAI-compatible endpoint, set `AGENTJURY_COMPATIBLE_BASE_URL`, optionally
+set `AGENTJURY_COMPATIBLE_API_KEY`, and use `accuracy:compatible:local-model`.
+OpenRouter and custom endpoints receive the task and agent output. The model
+vendor in an OpenRouter slug determines provider diversity. Ollama judges
+share one provider identity, and custom-endpoint judges share another. If the
+custom endpoint URL matches the configured Ollama URL, both routes count as
+Ollama.
+
+## Artifact coverage
+
+Each turn captures at most five files and at most 20,000 characters from each.
+Verdict `artifact_coverage` records full, partial, omitted and unavailable files
+separately. Partial and omitted files receive no new certification metadata or
+sidecar, and prior certification is removed for the current generation. A full
+file is annotated only while its captured generation and content
+digest still match. Newer writes in any session using this Jury instance prevent
+older reviews from overwriting that file's metadata, even if the body is identical.
+Historical verdicts are retained with `changed` or `stale` annotation status.
+
+The SHA-256 scope is UTF-8 text after newline normalization and removal of this
+plugin's AgentJury frontmatter keys. Other frontmatter is preserved. The digest
+is stored as `agentjury_content_sha256`; sidecar coverage links it to the artifact
+ID and run. Earlier jury metadata is removed from the next review's input.
+Certification concerns this snapshot and the whole turn's submitted task/output,
+not a guarantee about later file contents or an individually graded file.
+
+Annotation checks and atomic replacements are serialized inside one Jury
+instance. External writers and separate plugin processes do not participate in
+its lock; content is rechecked immediately before replacement, but there is no
+filesystem compare-and-swap transaction. Consumers must compare the stored
+digest with current normalized content before trusting a historical annotation.
+An existing annotation whose digest no longer matches is stale, even if its
+status still reads `verified`.
+Storage errors can prevent cleanup of an old annotation; they are logged and
+recorded as `write_failed` in coverage. Always check the run ID, coverage and
+current digest together. All sidecars from a successful turn include the final
+coverage results for every captured path.
+
+`/jury` and next-turn feedback display deterministic `Local check` warnings
+separately from judge findings. Feedback is offered once on the next session
+turn; it does not infer task lineage. Disable `feedback` if that is unsuitable
+for sessions that mix unrelated tasks.
 
 ## Use
 

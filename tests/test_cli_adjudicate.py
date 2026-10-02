@@ -1,10 +1,13 @@
 """The adjudicate and verdicts CLI commands, against a saved verdict from FakeJudges."""
 
+import io
 import json
+import sys
 
 import pytest
 
 from agentjury import Panel, ReviewRequest, Verdict
+from agentjury import cli
 from agentjury.cli import main
 from agentjury.judges import FakeJudge
 
@@ -33,6 +36,24 @@ def reload(d, v):
 def events(d):
     f = d / "adjudications.jsonl"
     return [json.loads(l) for l in f.read_text(encoding="utf-8").splitlines()] if f.is_file() else []
+
+
+def test_review_prints_on_legacy_windows_stdout(tmp_path, monkeypatch):
+    task = tmp_path / "task.md"
+    output = tmp_path / "output.md"
+    task.write_text("Check the answer.", encoding="utf-8")
+    output.write_text("The answer is 323.", encoding="utf-8")
+    monkeypatch.setattr(cli, "build_panel", lambda spec, quorum=None: Panel([FakeJudge("accuracy")]))
+
+    buffer = io.BytesIO()
+    with io.TextIOWrapper(buffer, encoding="cp1252") as stdout:
+        monkeypatch.setattr(sys, "stdout", stdout)
+        result = main(["review", str(task), str(output), "--no-save"])
+        stdout.flush()
+        rendered = buffer.getvalue().decode("cp1252")
+
+    assert result == 0
+    assert "verified" in rendered
 
 
 def test_adjudicate_findings_and_review(saved, capsys):
@@ -143,3 +164,44 @@ def test_two_runs_of_one_request_both_saved(tmp_path):
     with pytest.raises(SystemExit) as e:  # request_id alone is now ambiguous
         main(["adjudicate", req.request_id, "--dir", str(d), "--producer-verdict", "correct"])
     assert "2 matches" in str(e.value)
+
+
+@pytest.mark.parametrize("second", [("99", "wrong"), ("2", "invalid")])
+def test_invalid_later_finding_leaves_verdict_and_log_unchanged(saved, second):
+    d, v = saved
+    before = (d / v.filename).read_bytes()
+    with pytest.raises(SystemExit):
+        main(["adjudicate", v.run_id, "--dir", str(d), "--judge", "critic",
+              "--finding", "1", "wrong", "--finding", *second])
+    assert (d / v.filename).read_bytes() == before
+    assert events(d) == []
+
+
+def test_verdict_replace_failure_does_not_publish_audit(saved, monkeypatch):
+    d, v = saved
+    before = (d / v.filename).read_bytes()
+    monkeypatch.setattr(cli.os, "replace", lambda *a: (_ for _ in ()).throw(OSError("disk failure")))
+    with pytest.raises(SystemExit, match="persist"):
+        main(["adjudicate", v.run_id, "--dir", str(d), "--producer-verdict", "correct"])
+    assert (d / v.filename).read_bytes() == before
+    assert events(d) == []
+
+
+def test_audit_failure_is_recoverable_without_duplicate_events(saved, monkeypatch):
+    d, v = saved
+    original = cli.log_event
+    def append_then_fail(directory, event):
+        original(directory, event)
+        raise OSError("interrupted after append")
+    monkeypatch.setattr(cli, "log_event", append_then_fail)
+    with pytest.raises(SystemExit, match="pending"):
+        main(["adjudicate", v.run_id, "--dir", str(d), "--producer-verdict", "correct"])
+    interrupted = reload(d, v)
+    assert interrupted.human_verdict == "correct"
+    assert len(interrupted.pending_adjudication_events) == 1
+    monkeypatch.setattr(cli, "log_event", original)
+    main(["adjudicate", v.run_id, "--dir", str(d), "--producer-verdict", "flawed"])
+    assert reload(d, v).pending_adjudication_events == []
+    history = events(d)
+    assert [(e["old"], e["new"]) for e in history] == [(None, "correct"), ("correct", "flawed")]
+    assert len({e["event_id"] for e in history}) == 2

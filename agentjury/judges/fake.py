@@ -14,6 +14,7 @@ from .base import Completion, Judge
 
 class FakeJudge(Judge):
     provider = "fake"
+    requires_evidence = False
 
     def __init__(self, role: str, vote: str = "approve", score: float = 8.0,
                  reason: str = "Looks fine.", findings: list[dict] | None = None,

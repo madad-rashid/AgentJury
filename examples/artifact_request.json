@@ -1,0 +1,14 @@
+{
+  "schema_version": "0.7",
+  "task": "Write 323 into answer.txt.",
+  "output": "Done.",
+  "artifacts": [
+    {
+      "artifact_id": "answer-file",
+      "name": "answer.txt",
+      "content": "324",
+      "media_type": "text/plain",
+      "coverage": "full"
+    }
+  ]
+}

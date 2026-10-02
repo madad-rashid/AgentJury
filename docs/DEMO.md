@@ -4,7 +4,12 @@ Use this for the first public launch video. The goal is to show the problem and 
 
 ## Demo story
 
-Hermes completes a short task with one subtle unsupported claim. AgentJury reviews the output in the background. Two reviewers approve most of the work, one critic flags the unsupported claim, and the overall verdict asks for revision. Hermes then receives the finding and fixes the output.
+Hermes completes a short task with one unsupported market claim. AgentJury reviews
+the output in the background. If two reviewers approve and the critic returns a
+grounded blocking finding, the verdict asks for revision. With an ordinary major
+finding and a 2-1 approval majority, the result would be verified. Record the actual
+votes/severity rather than scripting a verdict the aggregator would not produce.
+Hermes then receives the finding and can fix the output.
 
 ## Before recording
 
@@ -61,7 +66,8 @@ score 7.3
 status: needs_revision
 
 critic/anthropic ▼
-Unsupported market-size and growth claim not present in the supplied facts.
+[blocking] Unsupported market-size and growth claim contradicts the task's
+instruction not to add market-size claims or forecasts. [excerpts checked]
 ```
 
 On-screen caption:
@@ -101,3 +107,9 @@ Use this as a spoken script:
 ## What to show in launch posts
 
 Use the clearest frame from the verdict as the thumbnail. Keep the first public demo under one minute. Link directly to the GitHub repository and ask people to test the project rather than asking for stars.
+
+This is a demonstration scenario, not measured reviewer accuracy. Live votes and
+timing can differ; prompt excerpts cannot prove the finding's interpretation.
+Use matching draft core/plugin versions and non-private test content. Recording
+a live-provider demo requires separately authorized inference. See
+[evaluation](EVALUATION.md) and [security](SECURITY.md).
