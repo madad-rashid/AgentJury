@@ -683,3 +683,27 @@ The original frozen evidence is unchanged. [Diagnostic investigation and
 sanitized accounting observations](openrouter-diagnostic-followup.md) explain
 the established logging defect, offline fixtures, later billing reconciliation
 and a proposed one-call diagnostic requiring separate authorization.
+
+
+## Authorized single diagnostic completion - 2026-10-02
+
+Exactly one further completion was explicitly authorized and attempted, with no
+retry or repair. The reviewed harness rejected it at completion validation:
+`unexpected_native_finish_reason`. Actual standardized finish was `stop`, native
+finish was `completed`; exact requested model/OpenAI provider checks passed,
+and diagnostics recorded one nonempty string message. The content acceptance
+check was not reached. All guards remain unchanged.
+
+Incremental response-reported cost **$0.004696**; cumulative reported **$0.009332**.
+Immediate key usage still reflected only prior $0.004636 and generation metadata
+returned 404, so incremental settlement was unresolved and the $0.057344
+reservation remained held. No semantic verdict or original-call diagnosis is
+claimed. [Full single-call report, frozen driver and sanitized evidence](openrouter-single-diagnostic.md)
+records the actual branch and proposes offline compatibility review as the next
+step. No further inference or product code change occurred in this follow-up.
+
+A later single nonbillable key read at 20:10:18 UTC reconciled incremental usage
+at **$0.004696**, cumulative **$0.009332**, remaining **$2.990668**, cap unchanged.
+Generation metadata remained unavailable and was not retried. The prior
+unresolved snapshot/reservation is retained historically; this is dedicated-key
+service accounting reconciliation, not independent payment verification.
