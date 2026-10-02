@@ -246,3 +246,95 @@ compliance and severity consistency on a representative labeled pack before
 routine certification. Do not infer that downloading a larger model solved
 review quality. No cloud inference, credential handling, production gateway
 changes, existing-model deletion, merge or release occurred.
+
+
+## Artifact-prompt investigation — 2026-10-02
+
+The authorized targeted diagnosis used baseline PR head
+`ac780dfea5ac0d8651697878a8858d7c8004d130` and installed
+`qwen2.5:7b-instruct`. No production code, rubric, prompt or evidence-validator
+change was retained. A throwaway task-local harness compared the exact existing
+prompt with one general candidate: explicitly review response plus artifact
+deliverables; distinguish response and artifact excerpt sources; describe both
+sources in the JSON example; remind repair to recheck defects and attribution.
+The candidate was not tailored to a particular calculation or file name.
+
+The previously captured failures showed two separate problems: false criticism
+of a correct equation, and quoting artifact content as if it appeared in the
+assistant's short file-writing response. Existing prompt wording emphasizes
+AGENT OUTPUT at the final instruction and JSON example despite earlier artifact
+allowance. This is a plausible ambiguity, not proof of the causal explanation.
+The evidence validator was working as designed; literal-source validity cannot
+establish that a criticism is true.
+
+Before inference, eight synthetic cases, splits and expected votes were declared:
+four development cases (correct/wrong arithmetic, correct/wrong checklist),
+then four held-out cases (correct/wrong JSON, correct/wrong pairs of artifacts
+sharing a filename but having distinct IDs). Development used accuracy;
+held-out used accuracy and critic. Correct cases expected approval with no
+findings; defective cases expected a grounded revision identifying the actual
+artifact defect. There were 12 review opportunities per variant. The same
+90-second timeout, zero transport retries, one opinion repair, 1,200-token cap,
+8,192 context, temperature 0 and seed 42 were used. Native inference made
+**36 calls**, including repairs, within the predeclared 48-call ceiling.
+All reported the requested model and normal stop, with no timeout/truncation.
+
+The one candidate was frozen before inspecting held-out outputs; no tuning or
+second candidate followed those outputs. All recorded system/user/repair prompts
+were checked against the same unchanged runner and matched exactly. The runner
+rewrote the same freeze file between stages and did not enforce an immutable
+baseline/hash at runtime; this is a methodology limitation, not a claim of a
+hardened evaluation runner. Synthetic cases, exact prompt templates, parameters,
+raw responses and parsed results are in
+[the investigation evidence](artifact-prompt-investigation.md).
+
+| Case / expected vote | Baseline accepted votes | Candidate accepted votes |
+| --- | --- | --- |
+| Development arithmetic correct / approve | accuracy: unavailable | accuracy: revise, false finding |
+| Development arithmetic wrong / revise | accuracy: revise | accuracy: unavailable |
+| Development checklist correct / approve | accuracy: revise, false finding | accuracy: approve |
+| Development checklist wrong / revise | accuracy: revise, wrong rationale | accuracy: unavailable |
+| Held-out JSON correct / approve | accuracy: approve; critic: approve | accuracy: approve; critic: approve |
+| Held-out JSON wrong / revise | accuracy: unavailable; critic: revise, mixed true/false findings | accuracy: unavailable; critic: unavailable |
+| Held-out duplicate filenames correct / approve | accuracy: approve; critic: approve | accuracy: approve; critic: approve |
+| Held-out duplicate filenames wrong / revise | accuracy: unavailable; critic: unavailable | accuracy: unavailable; critic: unavailable |
+
+| Metric | Baseline | Candidate |
+| --- | --- | --- |
+| Protocol/evidence-valid reviews | 8/12 | 6/12 |
+| Accepted votes matching expected label | 7/12 | 5/12 |
+| Correct-artifact approval | 4/6 | 5/6 |
+| Defective-artifact accepted revision | 3/6 | 0/6 |
+| Defective-artifact approval | 0/6 | 0/6 |
+
+The expected-vote metric is not review correctness. Baseline's checklist-wrong
+review chose revision for the wrong reason: it demanded the checklist in the
+assistant response, despite a supplied artifact, rather than identifying Delete
+instead of Publish. The baseline JSON-wrong critic identified pending instead
+of ready correctly, but also falsely demanded JSON in the assistant response.
+The candidate arithmetic-correct review was accepted after repair because its
+artifact/task quotes existed, yet falsely labeled the matching equation a defect.
+These are substantive model errors even when evidence provenance is valid.
+
+Independent read-only review recomputed all counts, verified the recorded
+prompt variants and revalidated accepted evidence. It confirmed the source
+distinction is defensible,
+but ambiguity is not established as the root cause. It also noted that the
+candidate's broad approval instruction could interfere with role-specific
+abstention or response defects; this is another reason not to adopt it. The
+experiment did not cover injection resistance, partial artifact coverage,
+conflicting response claims, production Hermes or general reliability. Baseline
+always ran first; no comparative latency conclusion is drawn. The candidate
+changed multiple wording instructions together, so effects cannot be attributed
+to one sentence.
+
+Decision: **discard the candidate**. Its gain on one correct checklist did not
+offset reduced availability and loss of accepted defective-artifact revisions.
+No defensible prompt improvement was demonstrated, and evidence gates remain
+unchanged. No implementation was made, so no new regression tests or claimed
+TDD fix result accompanies this docs-only negative finding. Next decide whether
+to fund a separate controlled experiment with structured source-addressed input
+and targeted safe validation-error feedback, using a fresh held-out set; do not
+weaken quote checks or accept the present model for routine certification.
+No new downloads, cloud inference, credentials, production changes, merge or
+release occurred during this investigation.
