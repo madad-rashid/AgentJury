@@ -1,7 +1,8 @@
 # Provider routes
 
-This guide describes the draft `fix/review-integrity` branch, not the older
-published package. Install the branch as described in [migration](MIGRATION.md).
+This guide describes the repository provider implementation and the unreleased
+fixed-model safeguard follow-up, not the older published package. See
+[migration](MIGRATION.md) for source installation guidance.
 Panel syntax is `role:provider[:model]`, shared by the CLI and Hermes. Empty
 entries and a trailing comma are tolerated; an empty panel is rejected.
 
@@ -21,7 +22,15 @@ configuration IDs; historical reputation and benchmark jobs must remain distinct
 ## Configuration
 
 OpenRouter needs `OPENROUTER_API_KEY`. Automatic `openrouter/*` aliases are
-rejected; choose fixed model slugs. The full request, including `:free` or other
+rejected; choose fixed model slugs. Both native and SDK OpenRouter routes reject
+standalone and combined `@preset/...` references before constructing a transport.
+Fixed slugs use letters, digits, dots, underscores and hyphens in model names,
+with optional colon-separated variants; extra path segments and percent-encoded
+references are rejected. Presets can change routing, prompts and generation
+settings outside the recorded reviewer configuration; see
+[OpenRouter's preset syntax](https://openrouter.ai/docs/guides/features/presets#using-presets).
+This validation is specific to the OpenRouter route, not generic compatible or
+Ollama model names. The full request, including `:free` or other
 routing variant, is retained in `params.requested_model`. `Review.model` records
 the canonical vendor/model and `observed_model` records the endpoint report.
 The returned model must match the requested variant or its exact base slug.

@@ -4,6 +4,11 @@ These changes consolidate the draft provider and free-jury branches on
 `fix/review-integrity`. They have not been merged or published to PyPI.
 The current published v0.4.4 release notes remain a record of that release.
 
+- Restore fixed-model validation for native and SDK OpenRouter routes, including
+  direct SDK judge construction. Reject preset references before transport
+  creation while preserving fixed model slugs and colon variants. Other provider
+  model policies remain unchanged.
+
 - Recompute full-artifact digests and revalidate a detached request at panel
   dispatch, preventing supplied or stale hashes from identifying different
   content in verified coverage. Preserve partial-artifact full-source hashes.
