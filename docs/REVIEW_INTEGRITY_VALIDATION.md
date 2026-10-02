@@ -57,11 +57,12 @@ setuptools 84.0.0 and wheel 0.48.0. Dependencies came from official PyPI.
 - Independent two-process Windows adjudication lock probe: competing writer
   blocked while locked, then acquired after release.
 
-All final tests set `AGENTJURY_LIVE=0` and blocked non-test network endpoints.
+All final offline regression tests set `AGENTJURY_LIVE=0` and blocked non-test network endpoints.
 Native HTTP tests used ephemeral local mock servers; direct/compatible tests
 used credential-free stubs or dummy keys and realistic SDK response classes.
-No authorized live inference validation was performed. An earlier combined
-run was interrupted after an obsolete missing-SDK fixture could reach the
+At that offline-validation stage, no authorized live inference validation had
+been performed; the separately authorized local smoke is recorded below.
+An earlier combined run was interrupted after an obsolete missing-SDK fixture could reach the
 native local HTTP route; no completed model inference was established. The
 fixture was corrected and the network guard added before further full runs.
 
@@ -96,5 +97,76 @@ Linux and other Python versions were not rerun locally; the draft pull request's
 configured CI matrix supplies those checks. Their exact outcome belongs to that
 revision's GitHub checks rather than these historical local test counts.
 Publication of a draft PR was separately authorized after the local fix commit.
-Merging, release/deployment and live-model validation remain separately authorized
-actions. No new live-model validation follows from publishing this branch.
+Merging and release/deployment remain separately authorized actions. Publishing
+this branch itself does not provide live-model validation; the later local smoke
+was separately authorized and is described below.
+
+
+## Authorized local Ollama smoke — 2026-10-02
+
+Synthetic live cases were run against exact published implementation commit
+`bc0c217050a2d2c1a0a1654278a4572ee805331f`, after verifying local and remote
+branch heads matched. This documentation follow-up changes no implementation.
+Ollama was already running on loopback. Its installed inventory contained only
+`qwen3:4b-instruct` (4B, Q4_K_M) and `qwen3:0.6b`; no larger installed model was
+available for comparison. Nothing was downloaded or installed.
+
+The smoke used `qwen3:4b-instruct`, whose installed digest was
+`0edcdef34593eac1aa2be9c7d06c432dcf81945adca5eca2f27662c18f168ba0`.
+Accuracy and critic roles used the same model/provider, quorum 2, and sequential
+execution. A task-local harness injected native payload options: temperature 0,
+seed 42, context 8,192, output limit 1,200 tokens, thinking disabled, and
+`keep_alive=2m`. Each native HTTP call had a 90-second timeout, transport retries
+were disabled, and each judge could make its existing single opinion-repair
+attempt. These are bounded harness overrides, not stock CLI defaults. The
+native adapter, parsing, evidence validation, repair and aggregation code were
+unchanged. Successful and diagnostic responses reported the requested model.
+
+| Synthetic case | Expected useful review | Actual result | Wall time |
+| --- | --- | --- | --- |
+| Correct answer: `17 + 25 = 42.` | Approvals without findings | `verified`, 2 approve / 0 revise, score 10, heuristic confidence 0.5; no findings or errors | 3.84 s |
+| Wrong answer: `17 + 25 = 43.`, with reference answer 42 in context | Grounded blocking findings | `insufficient_jury`; neither role produced a valid opinion, including repair; both failed JSON/evidence validation | 26.42 s |
+| Correct disposable Markdown arithmetic note through Hermes hooks | Approve the artifact and record coverage | `insufficient_jury`; neither role produced a valid opinion, including repair; both failed validation | 33.29 s |
+
+Additional instrumented accuracy-role reproductions captured the reason for
+rejection. For the wrong answer (10.85 s), the model correctly recognized 43
+instead of 42, but added a second finding whose output excerpt quoted the
+reference answer 42, absent from the agent output. Repair repeated this invalid
+attribution. For the correct file (12.64 s), it produced contradictory criticism
+claiming the equation was both wrong and correct, alongside invalid output
+excerpts/artifact attribution; repair remained invalid. These additional
+reproductions are distinct from the primary cases. The evidence gate correctly
+rejected the opinions. Raw proposed findings are not accepted verdict findings,
+and rejection is not evidence that the model correctly assessed every case.
+
+The Hermes case exercised actual plugin registration and the `post_tool_call`,
+`post_llm_call` and `pre_llm_call` handlers with an isolated fake host context,
+real local inference and disposable storage. The harness created the file and
+signaled the write-tool hook; a running Hermes producer did not perform that
+write. Full artifact coverage and applied annotation were recorded, with
+`insufficient_jury` frontmatter, sidecar and persisted verdict. Feedback was
+returned once, then absent on the next call. This is integration-harness
+coverage, not full installed/running-Hermes end-to-end validation. No real vault,
+Discord, gateway credentials or production configuration was accessed.
+
+A separate refused-loopback endpoint probe returned `insufficient_jury` and a
+sanitized `URLError` in 2.01 s, with no model inference. The completed smoke had
+no timeout or token-truncation failures. An initial harness run was interrupted
+after identifying an incorrect harness factory attribute; the harness was
+corrected outside the repository and all three reported cases rerun. The
+correct case took 8.74 s initially and 3.84 s in the final warm-model run; the
+table reports the final complete run.
+
+The configured all-Ollama panel can return `verified`: the provider floor is
+`min(2, requested_providers)`, so a configured single-provider panel has floor 1.
+A mixed-provider panel degraded to one provider remains insufficient. The two
+local roles do not establish independent judgment. A policy requiring local-only
+approval to remain advisory would be a separate behavior change.
+
+Conclusion: native local transport and fail-closed opinion validation worked,
+but this 4B model was unreliable on these three simple cases. Do not weaken
+provenance checks to obtain a verdict. Before routine certification, evaluate
+model/prompt compliance on a representative labeled pack, including correct
+artifact acceptance and grounded wrong-answer rejection. This tiny smoke proves
+neither general accuracy nor reviewer independence. There were no cloud model
+calls, credentials, production changes, merges or releases.
