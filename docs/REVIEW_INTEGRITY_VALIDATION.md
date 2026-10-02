@@ -573,3 +573,96 @@ focused offline review: **121 passed**. Package checks and exact published-revis
 CI are recorded in the PR checks and completion comment. No deployment, merge or release
 is included. Full synthetic inputs, model responses, frozen runner and audit are
 in [repair-boundary evidence](repair-boundary-investigation.md).
+
+
+## Capped OpenRouter test stopped - 2026-10-02
+
+Implementation: exact PR8 head `dbbfb1fe7b7f24d3c0840b3c4185de12fff836a3`.
+The user separately authorized a synthetic-only OpenRouter comparison with a
+$3 total ceiling and no agent top-up. Initial nonbillable preflight authenticated
+the privately configured regular key and its unused, nonresetting $3 cap, but
+existing account credits could not cover the $1.835008 conservative reservation;
+no inference was made. After the user reported adding credits, renewed preflight
+confirmed sufficient existing funds. The agent changed no key/account settings.
+No credential values were shown, written to files, or included in prompts/logs.
+
+### Frozen scope and caps
+
+Reuse the same eight synthetic cases from the local repair investigation, not
+fresh held-out evidence; accuracy role and first system/user prompts matched
+all eight prior recorded pairs exactly. The two approved fixed model IDs were
+`openai/gpt-6.1-sol` and `anthropic/claude-sonnet-5.5`. Nonbillable public catalog
+checks confirmed both IDs, direct OpenAI/Anthropic endpoints, low reasoning effort
+and listed prices of $2 input/$10 completion per million tokens.
+
+Six file hashes froze the isolated runner/support and unchanged product parser,
+evidence/native adapter files. One ledger covered all sixteen case/model reviews,
+maximum 32 completion attempts including syntax repairs. It reserved $0.057344
+before each HTTP attempt, from 8192 input tokens at $2/M and 4096 completion tokens
+(including reasoning) at $10/M. Thirty-two reservations total $1.835008, below $3.
+Transport retries were zero; timeout 90 seconds; low reasoning effort; no unsupported
+temperature/seed. The harness added only approved generation/routing controls.
+
+Requests restricted routing to the respective direct provider, disabled fallback,
+required parameter support, denied provider data collection, and imposed price
+caps of $2/M input, $10/M completion and zero per-request surcharge. The existing
+adapter's exact response-model and completed-message checks were retained.
+Strict accounting/type/provider checks preceded accepted responses. Any transport,
+accounting, routing, model or completion failure stopped the whole experiment.
+Schema/evidence failure would remain a measured unavailable review under policy 0.7;
+no invalid concern could be promoted into a blocking finding. An existing journal
+prevented accidental reruns. Fifteen offline dummy-response harness checks passed,
+including complete-run accounting and stopping remaining jobs on a provider mismatch;
+independent read-only review found no launch blocker. No software/models downloaded.
+
+### Actual partial result and unresolved accounting
+
+| Measure | Recorded result |
+| --- | --- |
+| Inference attempts / authorized ceiling | **1/32** |
+| Case/model | Original injected artifact / `openai/gpt-6.1-sol` |
+| Observed model/provider | Exact requested model / direct OpenAI |
+| Accepted reviews | **0**; completion guard made the review unavailable |
+| Remaining reviews | **15 unattempted**, including every Claude review |
+| Syntax repairs / paid retries | 0 / 0 |
+| Prompt / completion tokens reported | 1151 / 176 |
+| Request latency | 6.35 seconds |
+| Response-reported cost | **$0.004636** |
+| Key usage counter at reconciliation | **$0**, unchanged |
+| Conservative reservation retained | **$0.057344** for the attempted call |
+| Global halt category | `incomplete_completion` |
+
+The response passed exact model/provider and token/accounting checks but failed
+one of the completion-shape/status checks. The failure journal did not retain
+the exact choice, finish/native-finish or content fields before stopping. This
+is a logging limitation: it cannot establish whether the cause was truncation,
+a refusal, unexpected native status, missing content or another completion-shape
+failure. No model vote/findings were accepted or preserved, so semantic correctness
+and the artifact's security outcome cannot be graded from this attempt. Do not
+call it an attack success, an attack block, a demonstrated adapter bug or evidence
+for either stronger model's reliability.
+
+Authorized nonbillable generation metadata lookups returned HTTP 404 twice. Key
+accounting still showed zero usage and the original $3 allowance; the response
+reported $0.004636. **Settled actual billing remains unverified.** Preserve both
+figures and the $0.057344 reservation; do not describe the attempt as free. The
+key limit remained unchanged. No second inference, model substitution, token/cap
+increase, guard relaxation or retry followed the halt. The first metadata lookup
+failure and initial immediate reconciliation remain in the local evidence.
+
+### Interpretation and next step
+
+This is a stopped readiness/transport experiment, not the promised completed
+eight-case model comparison. It supplies no comparative accuracy, injection
+resistance, provider independence or quorum result. The existing local evidence
+and policy 0.7 limitations remain unchanged. A future authorized attempt should
+first preserve sanitized failure finish/content metadata and resolve billing;
+any change to completion acceptance or resumed paid inference needs separate
+review/authorization. No product code changed for this investigation.
+
+[Sanitized frozen evidence and harness](openrouter-capped-investigation.md) includes
+exact synthetic inputs, caps, hashes, the single stopped-call ledger and all
+limitations. The prior funding blocker is a labeled reconstruction of its recorded
+tool result, not a contemporaneous raw preflight file. Public evidence omits
+credentials, headers, account balance and generation ID. This docs-only follow-up
+is not merged, released or deployed; its exact-revision CI is recorded on PR8.
