@@ -11,6 +11,25 @@ reinstallation/provenance checks and separate plugin-folder installation.
 These documentation/manifest changes do not update an installed Hermes environment
 or the immutable PyPI README/sdist snapshot, and do not constitute another release.
 
+Unreleased on `main` after 0.5.0:
+
+- Added `agentjury change candidates|prepare|send|status` for explicit reviews of
+  a Git code change. `prepare` builds the diff of selected changed files, leaves
+  out secret-named files, symlinks, submodules, lockfiles and binary content,
+  refuses on a local secret-scan match, and writes a preview of the exact
+  payload and destinations without contacting any reviewer. `send` submits a
+  prepared review once, after checking a confirmation code, the reviewed file
+  bytes and the reviewer configuration. `status` reports whether the reviewed
+  files changed since. Verdicts use the unchanged aggregation and adjudication.
+- Added packaged `correctness`, `security` and `tests` reviewer roles for code
+  changes; they are new, unbenchmarked reviewer configurations.
+- Added the Claude Code plugin in `integrations/claude-code/` and a repository
+  marketplace. Its user-invoked skills prepare reviews, show status and record
+  user-stated grades; the user runs the send command, and a hook denies
+  Claude-initiated sends.
+- Added `agentjury --version`. No protocol schema, rubric or existing command
+  behavior changed.
+
 The 0.5.0 release included:
 
 - Restore fixed-model validation for native and SDK OpenRouter routes, including

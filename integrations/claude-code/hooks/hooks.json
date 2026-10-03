@@ -1,0 +1,40 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(*agentjury change send *)",
+            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"AgentJury: only the user may send code to external reviewers. Do not retry. Ask the user to run the printed agentjury change send command themselves, for example by typing it after !.\"}}'",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "Bash(*agentjury.cli change send *)",
+            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"AgentJury: only the user may send code to external reviewers. Do not retry. Ask the user to run the printed agentjury change send command themselves, for example by typing it after !.\"}}'",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "PowerShell(*agentjury change send *)",
+            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"AgentJury: only the user may send code to external reviewers. Do not retry. Ask the user to run the printed agentjury change send command themselves, for example by typing it after !.\"}}'",
+            "timeout": 10
+          },
+          {
+            "type": "command",
+            "if": "PowerShell(*agentjury.cli change send *)",
+            "command": "echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"permissionDecision\":\"deny\",\"permissionDecisionReason\":\"AgentJury: only the user may send code to external reviewers. Do not retry. Ask the user to run the printed agentjury change send command themselves, for example by typing it after !.\"}}'",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

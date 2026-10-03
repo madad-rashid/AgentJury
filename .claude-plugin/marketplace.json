@@ -1,0 +1,15 @@
+{
+  "name": "agentjury",
+  "description": "AgentJury integrations for Claude Code.",
+  "owner": {
+    "name": "Rashid Al-Derham",
+    "url": "https://github.com/madad-rashid"
+  },
+  "plugins": [
+    {
+      "name": "agentjury",
+      "source": "./integrations/claude-code",
+      "description": "Explicit, previewed code-change reviews by an AgentJury panel; you run the send command yourself."
+    }
+  ]
+}

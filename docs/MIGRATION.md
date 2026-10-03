@@ -108,3 +108,18 @@ Readable JSON opinions that fail schema or evidence validation now become
 unavailable without a second model opinion. Only unreadable JSON retains a
 single retry. Existing evidence/quorum rules are unchanged. Start new benchmark
 runs with the new identities; an old run cannot silently resume under policy 0.7.
+
+## Unreleased on `main`: code-change review
+
+`agentjury change` (candidates, prepare, send, status) and the Claude Code
+plugin in `integrations/claude-code/` are additions on `main`; the published
+0.5.0 package does not contain them. No schema, rubric, aggregation or
+existing command behavior changes. Change-review verdicts are schema 0.7
+verdicts whose existing `artifact_coverage` lists each selected path with its
+working-tree SHA-256 and `full` or `omitted` coverage. Snapshot records live in
+`.agentjury/changes/`, outside the verdict directory, so `agentjury verdicts`
+and `agentjury adjudicate` work unchanged. The new commands exit 6 for a
+refusal and `status` exits 7 for a stale review. `agentjury --version` prints the
+package and schema versions. The packaged `correctness`, `security` and `tests`
+roles are new reviewer configurations; do not merge their history with other
+roles.

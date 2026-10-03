@@ -15,7 +15,9 @@ Controlled Institutional Private-Credit Pilot.md   +43
 ▲4 ▼1   score 8.7   consensus 80%   verified
 ```
 
-AgentJury is framework-independent. The first live integration is Hermes, and the core protocol works with any system that can build a `ReviewRequest`.
+AgentJury is framework-independent. The first live integration is Hermes; Claude
+Code can request explicit, previewed reviews of code changes. The core protocol
+works with any system that can build a `ReviewRequest`.
 
 ## Looking for testers
 
@@ -154,6 +156,38 @@ reputation. A custom compatible endpoint may omit model telemetry; that is
 recorded as unknown. These are endpoint reports, not cryptographic model
 attestations. Provider labels and different models are proxies for diversity;
 shared training, infrastructure and correlated mistakes can remain.
+
+## Review a code change
+
+`agentjury change` reviews a Git change on request. It is available on `main`
+after 0.5.0 and is not in the published 0.5.0 package. Preparing a review sends
+nothing:
+
+```bash
+agentjury change candidates
+agentjury change prepare --task "Retry uploads with exponential backoff" --path src/upload.py
+```
+
+`prepare` builds the diff of the selected changed files against `HEAD`
+(including uncommitted edits), runs a local secret scan, and prints the
+reviewers, their destination hosts, the files sent and not sent, and a
+confirmation code. `.agentjury/changes/pending/<id>/preview.md` holds the exact
+prompt each reviewer would receive. Then send it once:
+
+```bash
+agentjury change send <id> --confirm <code>
+agentjury change status
+```
+
+`send` refuses, without contacting any reviewer, if the code, the payload or the
+reviewer configuration changed after the preview. The verdict is an ordinary
+AgentJury verdict saved in `.agentjury/verdicts/` and graded with
+`agentjury adjudicate`. `status` reports whether the reviewed files are
+unchanged (exit 0) or stale (exit 7). Refusals exit 6. The default panel is
+`correctness:openai,security:anthropic,tests:openai`; set
+`AGENTJURY_CHANGE_PANEL` or `--panel` to change it. Files with secret-bearing
+names, symlinks, lockfiles and binary files are never sent. See
+[security](docs/SECURITY.md#code-change-reviews).
 
 ## Compare free juries
 
@@ -370,6 +404,22 @@ Disable feedback for unrelated tasks sharing a session.
 
 See [integrations/hermes/README.md](integrations/hermes/README.md) for installation and configuration.
 
+### Claude Code
+
+`integrations/claude-code/` is a Claude Code plugin for explicit code-change
+reviews. `/agentjury:review` confirms the task and files with you and prepares a
+preview; you run the printed `agentjury change send` command yourself, and a
+plugin hook denies that command, in its usual forms, when Claude tries to run it. `/agentjury:status` reports whether
+the reviewed code changed since, and `/agentjury:adjudicate` records your grades.
+Nothing is reviewed automatically and verdicts trigger no edits.
+
+```text
+/plugin marketplace add madad-rashid/AgentJury
+/plugin install agentjury@agentjury
+```
+
+See [integrations/claude-code/README.md](integrations/claude-code/README.md).
+
 Adapters for other agent frameworks are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Protocol
@@ -401,7 +451,7 @@ for exact input commits, regression results and the limits of this review.
 
 ## Status
 
-Public alpha. The core aggregation rules are intentionally stable while real verdicts are collected through the Hermes integration and direct CLI use.
+Public alpha. The core aggregation rules are intentionally stable while real verdicts are collected through the Hermes and Claude Code integrations and direct CLI use.
 
 The next research step is reviewer reputation by task type using human-adjudicated findings, followed by diversity weighting from observed disagreement patterns.
 
@@ -422,6 +472,7 @@ not prove interpretation. See [security limits](docs/SECURITY.md).
 - [x] Human finding-level adjudication and append-only adjudication history
 - [x] PyPI release
 - [x] OpenRouter, Ollama, and configurable OpenAI-compatible judge routes
+- [x] Claude Code integration: previewed, user-sent code-change reviews (on `main`, unreleased)
 - [ ] Reviewer reputation by task type, weighted by human agreement over time
 - [ ] Jury diversity weighting from historical disagreement
 - [ ] Calibrated confidence from observed outcomes

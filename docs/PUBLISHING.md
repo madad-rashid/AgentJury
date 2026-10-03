@@ -97,6 +97,11 @@ Do not retag an existing version. If a release mistake is found after publicatio
 
 ## After PyPI publication
 
+The Claude Code plugin and its marketplace are served from this repository, not
+from the wheel. When a release first contains `agentjury change`, update the
+plugin README's installation command to that release and increase the plugin
+`version` if its files changed.
+
 Keep README installation instructions aligned with the released compatibility
 range. For the current 0.5 series:
 

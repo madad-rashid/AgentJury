@@ -24,6 +24,19 @@ The local reviewer-command guard can separately downgrade `verified` to
 means this configured jury approved the supplied material; it does not establish
 ground truth, calibrated confidence or absence of correlated mistakes.
 
+## Code-change verdicts
+
+`agentjury change` uses the same rules. Its verdict means that the configured
+jury approved the supplied diff, task and test log; reviewers cannot run the
+code or see unchanged files beyond the diff context. The packaged
+`correctness`, `security` and `tests` roles are new reviewer configurations
+with their own configuration IDs, and no benchmark case yet covers code, so
+there is no evidence about their accuracy. Findings are excerpt-checked against
+the diff like any other output. A verdict describes the exact bytes it covered:
+`agentjury change status` reports it as stale after any edit to a reviewed
+file. Grade findings with `agentjury adjudicate` to build the evidence that
+future reputation work needs.
+
 ## Benchmark gates and metrics
 
 Use an explicitly labeled dataset and explicit candidate panels. Each distinct
