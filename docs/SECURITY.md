@@ -91,8 +91,8 @@ dist files; key and certificate files; credential stores such as `.npmrc`,
 `.pypirc`, `.netrc`, `*.tfvars` and `*.tfstate`; `.ssh/`, `.gnupg/`,
 `.aws/credentials`, `.docker/config.json`, `.kube/config` and
 `.claude/settings.local.json`), symlinks (never followed), submodules,
-lockfiles and unmerged files. Binary or non-UTF-8 content and diffs over the
-per-file cap are also left out. Every omission is listed with its reason, and
+lockfiles and unmerged files. Binary or non-UTF-8 content, files over 10 MB and
+diffs over the per-file cap are also left out. Every omission is listed with its reason, and
 the reviewers' scope notes name omitted paths without their contents.
 
 A deterministic scan covers everything user-controlled that would be sent: the

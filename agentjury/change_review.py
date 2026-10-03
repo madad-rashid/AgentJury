@@ -185,14 +185,16 @@ def load_reviews(root: Path) -> list[ChangeReview]:
     return reviews
 
 
-def load_pending(root: Path) -> list[ChangeBundle]:
+def load_pending(root: Path) -> list[tuple[ChangeBundle, bool]]:
+    """Prepared bundles, each with whether a send started (and saved no review)."""
     folder = _changes(root) / "pending"
     bundles = []
     for path in sorted(folder.glob("*/bundle.json")) if folder.is_dir() else []:
         try:
-            bundles.append(ChangeBundle.model_validate_json(path.read_text(encoding="utf-8")))
+            bundle = ChangeBundle.model_validate_json(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
+        bundles.append((bundle, (path.parent / ".sending").exists()))
     return bundles
 
 
@@ -744,6 +746,7 @@ def cmd_send(args: argparse.Namespace) -> int:
         _atomic_write(_changes(root) / "reviews" / f"{verdict.run_id}.json", review.model_dump_json(indent=2))
         shutil.rmtree(folder, ignore_errors=True)
     except OSError:
+        # The lock stays, so this bundle is never sent again or listed as unsent.
         print(verdict.model_dump_json(indent=2))
         print("Error: the review was sent but could not be saved; its verdict JSON is printed above.",
               file=sys.stderr)
@@ -751,10 +754,14 @@ def cmd_send(args: argparse.Namespace) -> int:
 
     if args.json:
         print(verdict.model_dump_json(indent=2))
-    else:
-        print("\n".join(["", *verdict_lines(verdict, bundle), "",
-                         "Code snapshot: CURRENT (reviewed files unchanged since the preview).",
-                         *_follow_up(review, cwd)]))
+        return VERDICT_EXIT[verdict.status]
+    # Reviews can take minutes; report the code as it is now, not as it was at dispatch.
+    changed = changed_since(root, bundle.snapshot)
+    snapshot_line = ("Code snapshot: STALE. Changed while the review ran: "
+                     + ", ".join(f"{_esc(path)} ({how})" for path, how in changed)
+                     + ". The verdict describes the previewed code.") if changed else \
+        "Code snapshot: CURRENT (reviewed files unchanged since the preview)."
+    print("\n".join(["", *verdict_lines(verdict, bundle), "", snapshot_line, *_follow_up(review, cwd)]))
     return VERDICT_EXIT[verdict.status]
 
 
@@ -797,11 +804,16 @@ def cmd_status(args: argparse.Namespace) -> int:
         if not reviews:
             pending = load_pending(root)
             if args.json:
-                print(json.dumps({"reviews": 0, "pending": [b.request.request_id for b in pending]}, indent=2))
+                print(json.dumps({"reviews": 0,
+                                  "pending": [b.request.request_id for b, started in pending if not started],
+                                  "unsaved": [b.request.request_id for b, started in pending if started]},
+                                 indent=2))
                 return 0
-            print("No sent change reviews in this repository.")
-            for bundle in pending:
-                print(f"Prepared, not sent: {bundle.request.request_id} ({bundle.created_at:%Y-%m-%d %H:%M} UTC)")
+            print("No saved change reviews in this repository.")
+            for bundle, started in pending:
+                state = ("Send started, no saved verdict (interrupted or failed to save)" if started
+                         else "Prepared, not sent")
+                print(f"{state}: {bundle.request.request_id} ({bundle.created_at:%Y-%m-%d %H:%M} UTC)")
             return 0
         review = _pick(reviews, args.run)
         snapshot = review.bundle.snapshot

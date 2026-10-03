@@ -26,6 +26,10 @@ PRIVATE = "-----BEGIN " + "OPENSSH PRIVATE KEY-----"
     ('password = "hunter2hunter2"', "credential_assignment"),
     ("client_secret: 'q8Zr0x!t4LmP'", "credential_assignment"),
     ('{"api_key": "4f6b1c9e2d7a"}', "credential_assignment"),
+    ('DB_PASSWORD = "hunter2hunter2"', "credential_assignment"),
+    ('aws_secret_access_key = "abcd1234efgh5678"', "credential_assignment"),
+    ('export OPENAI_API_KEY="q9w8e7r6t5y4u3i2"', "credential_assignment"),
+    ("settings.github_access_token = 'v1x2c3b4n5m6'", "credential_assignment"),
 ])
 def test_rules_report_location_not_value(text, rule):
     matches = scan([("diff:src/app.py", "first line\n" + text + "\n")], environ={})
@@ -41,6 +45,8 @@ def test_rules_report_location_not_value(text, rule):
     'api_key = "<your-api-key>"', 'password: "changeme123"', 'secret = "${SECRET_VALUE}"',
     'token = "xxxxxxxxxxxx"', 'password = "short"', 'api_key = "your_api_key_here"',
     "OPENAI_API_KEY=sk-...", "def password_strength(value):", "sk-learn is a library",
+    'password_reset_url = "https://example.com/reset"', 'next_page_token = "abcdef123456"',
+    'API_KEY_FILE = "/run/keys/api.txt"',
 ])
 def test_placeholders_and_ordinary_code_are_not_flagged(text):
     assert scan([("diff:a.py", text)], environ={}) == []
@@ -62,6 +68,14 @@ def test_environment_values_are_matched_by_secret_names_only():
     assert [(m.line, m.rule, m.variable) for m in matches] == [(3, "environment_value", "MY_SERVICE_API_KEY")]
     assert "v4lue" not in matches[0].describe()
     assert "MY_SERVICE_API_KEY" in matches[0].describe()
+
+
+def test_long_identifiers_scan_quickly():
+    import time
+    text = "_".join(["segment"] * 40_000) + " = 1\n"
+    started = time.perf_counter()
+    assert scan([("diff:a.py", text)], environ={}) == []
+    assert time.perf_counter() - started < 5
 
 
 def test_matches_are_per_source_and_deduplicated_per_line():

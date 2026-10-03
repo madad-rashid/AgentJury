@@ -59,8 +59,8 @@ blocking rules, and the same human adjudication.
    reviewer would receive.
 4. **You send it** by typing the printed command after `!`, or by running it in
    a terminal in the repository:
-   `agentjury change send <id> --confirm <code>`. Claude cannot send it: the
-   plugin's hook denies that command when Claude runs it.
+   `agentjury change send <id> --confirm <code>`. The plugin's hook denies that
+   command, in its usual forms, when Claude runs it.
 5. The verdict shows numbered findings with file hints. Claude summarizes it and
    does not edit, commit or start another review unless you ask.
 

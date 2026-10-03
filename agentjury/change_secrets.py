@@ -25,9 +25,13 @@ _RULES: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("jwt", re.compile(r"\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}")),
 )
 
+# A quoted value assigned to a name that ends in a credential word, with any
+# prefix (DB_PASSWORD, OPENAI_API_KEY, aws_secret_access_key). The name must
+# start an identifier, which also keeps matching linear on long identifiers.
 _ASSIGNMENT = re.compile(
-    r"(?i)\b(?:api[_-]?key|apikey|secret[_-]?key|client[_-]?secret|secret|access[_-]?token|"
-    r"auth[_-]?token|refresh[_-]?token|bearer[_-]?token|password|passwd|private[_-]?key)\b"
+    r"(?i)(?<![A-Za-z0-9_-])(?:[A-Za-z0-9]+[_-])*"
+    r"(?:api[_-]?key|apikey|secret[_-]?key|access[_-]?key|private[_-]?key|client[_-]?secret|secret|"
+    r"(?:api|access|auth|refresh|bearer|bot|session)[_-]?token|password|passwd)"
     r"[\"']?\s*(?::|=|=>|:=)\s*(?P<quote>[\"'])(?P<value>[^\"'\s]{8,})(?P=quote)"
 )
 _PLACEHOLDER_PREFIXES = ("your", "example", "dummy", "fake", "test", "sample", "placeholder",

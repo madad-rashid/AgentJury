@@ -128,6 +128,27 @@ def test_untracked_diff_matches_git(git_repo, content):
     assert output == expected
 
 
+def test_conflicted_files_are_unmerged_and_never_sent(git_repo):
+    git_repo.write("f.txt", "base\n")
+    git_repo.write("g.txt", "keep\n")
+    git_repo.commit("base")
+    git_repo.git("checkout", "-q", "-b", "other")
+    git_repo.write("f.txt", "theirs\n")
+    git_repo.commit("theirs")
+    git_repo.git("checkout", "-q", "-")
+    git_repo.write("f.txt", "ours\n")
+    git_repo.commit("ours")
+    merge = subprocess.run(["git", "merge", "-q", "other"], cwd=git_repo.path, capture_output=True)
+    assert merge.returncode != 0 and "<<<<<<<" in (git_repo.path / "f.txt").read_text(encoding="utf-8")
+    git_repo.write("g.txt", "edited during the merge\n")
+
+    found = {c.path: c for c in find_candidates(git_repo.path, base_commit(git_repo))}
+    assert found["f.txt"].change == "unmerged" and found["f.txt"].exclusion.startswith("unmerged")
+    snapshot, output = snapshot_of(git_repo)
+    assert not by_path(snapshot)["f.txt"].reviewed and "<<<<<<<" not in output
+    assert by_path(snapshot)["g.txt"].reviewed
+
+
 def test_deleted_and_staged_files_are_reviewed(git_repo):
     git_repo.write("old.py", "x = 1\ny = 2\n")
     git_repo.commit()

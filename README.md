@@ -409,7 +409,7 @@ See [integrations/hermes/README.md](integrations/hermes/README.md) for installat
 `integrations/claude-code/` is a Claude Code plugin for explicit code-change
 reviews. `/agentjury:review` confirms the task and files with you and prepares a
 preview; you run the printed `agentjury change send` command yourself, and a
-plugin hook stops Claude from running it. `/agentjury:status` reports whether
+plugin hook denies that command, in its usual forms, when Claude tries to run it. `/agentjury:status` reports whether
 the reviewed code changed since, and `/agentjury:adjudicate` records your grades.
 Nothing is reviewed automatically and verdicts trigger no edits.
 

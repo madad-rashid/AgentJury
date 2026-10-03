@@ -244,6 +244,15 @@ def find_candidates(root: Path, base_commit: str) -> list[Candidate]:
         found[path] = Candidate(path, change, True,
                                 bad_name or _exclusion(path, (old_mode, new_mode), change))
 
+    # A diff against a commit reports a conflicted path as modified; the index
+    # stages are the reliable signal that the file holds unresolved conflicts.
+    for entry in git(root, "ls-files", "-u", "-z").split(b"\0"):
+        if b"\t" not in entry:
+            continue
+        path, bad_name = _decode_path(entry.split(b"\t", 1)[1])
+        if not _internal(path):
+            found[path] = Candidate(path, "unmerged", True, bad_name or "unmerged; resolve the conflict first")
+
     for raw_path in git(root, "ls-files", "--others", "--exclude-standard", "-z").split(b"\0"):
         if not raw_path:
             continue
@@ -423,6 +432,7 @@ def capture(
     """Build the reviewed diff and bind it to the bytes it was made from."""
     files: list[ChangeFile] = []
     chunks: list[tuple[ChangeFile, str]] = []
+    total = 0
     for candidate in selected:
         def omit(reason: str) -> None:
             files.append(ChangeFile(path=candidate.path, change=candidate.change,
@@ -476,7 +486,7 @@ def capture(
         )
         files.append(item)
         chunks.append((item, diff))
-        total = sum(len(text) for _, text in chunks)
+        total += len(diff)
         if total > max_total_chars:
             # Stop early: a large accidental selection should not diff every remaining file.
             largest = sorted(chunks, key=lambda pair: len(pair[1]), reverse=True)[:5]

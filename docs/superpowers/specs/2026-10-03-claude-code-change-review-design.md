@@ -74,7 +74,9 @@ reviewer configuration changed, the bundle was edited, the bundle was already
 used or is being sent, or an identical payload was already reviewed (unless
 `--allow-repeat`). Otherwise it runs the existing `Panel.review`, saves the
 verdict to the verdict directory, writes the snapshot binding, deletes the
-pending bundle and exits with the existing verdict codes 0 to 3.
+pending bundle, reports whether reviewed files changed while the review ran,
+and exits with the existing verdict codes 0 to 3. If saving fails after the
+review, the lock stays so the bundle is neither resent nor listed as unsent.
 
 `agentjury change status [RUN]` shows a saved review with its snapshot state:
 exit 0 when current, 7 when stale. Adjudication uses the existing
@@ -89,9 +91,10 @@ with a reason and without reading their contents, when their names indicate
 secrets (`.env*` except example/sample/template files, private keys and
 certificates, credential stores such as `.npmrc`, `.pypirc`, `.netrc`,
 `*.tfvars`, `*.tfstate`) or when they are symlinks (never followed),
-submodules, lockfiles or unmerged. Binary or non-UTF-8 content and diffs over
-the per-file cap are also listed as not sent. A selection over the total cap is
-refused.
+submodules, lockfiles or unmerged (detected from index stages, because a diff
+against a commit reports conflicts as modifications). Binary or non-UTF-8
+content, files over 10 MB and diffs over the per-file cap are also listed as not
+sent. Preparation stops as soon as the selection exceeds the total cap.
 
 A deterministic secret scan covers every user-controlled text that would be
 sent: the task, each file's diff including removed and context lines, and the

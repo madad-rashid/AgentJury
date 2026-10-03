@@ -9,7 +9,7 @@ import pytest
 from agentjury import Panel, ReviewRequest, Verdict, aggregate, change_review, cli
 from agentjury.change_secrets import secret_env_values
 from agentjury.cli import main
-from agentjury.judges import ROLES, FakeJudge
+from agentjury.judges import ROLES, FakeJudge, register_roles
 from agentjury.judges.base import build_user_prompt
 
 GITHUB = "ghp" + "_" + "a1B2" * 9
@@ -287,6 +287,44 @@ def test_reviewer_command_in_the_diff_triggers_the_local_guard(git_repo, jury, c
     assert code == 1 and "Local check changed verified to needs_revision" in out
 
 
+class EditingJudge(FakeJudge):
+    """Changes a reviewed file while the panel is running, as an agent or editor might."""
+
+    def complete(self, system, user):
+        (self.repo / "app.py").write_bytes(b"def add(a, b):\n    return 0\n")
+        return super().complete(system, user)
+
+
+def test_send_reports_edits_made_while_the_review_ran(git_repo, jury, capsys):
+    register_roles(change_review.code_roles())
+    editing = EditingJudge("tests", provider="openai")
+    editing.repo = git_repo.path
+    jury.make = lambda: [FakeJudge("correctness", provider="openai"),
+                         FakeJudge("security", provider="anthropic"), editing]
+    prepare(capsys)
+    request_id, confirm, _ = pending(git_repo)
+    jury.make = lambda: [FakeJudge("correctness", provider="openai"),
+                         FakeJudge("security", provider="anthropic"), editing]
+    code, out, _ = send(capsys, request_id, "--confirm", confirm)
+    assert code == 0
+    assert "Code snapshot: STALE. Changed while the review ran: app.py (modified)" in out
+    assert "CURRENT" not in out
+
+
+def test_a_sent_review_that_cannot_be_saved_is_not_listed_as_unsent(git_repo, jury, capsys):
+    prepare(capsys)
+    request_id, confirm, folder = pending(git_repo)
+    blocker = git_repo.write("not-a-directory", "x\n")
+    code, out, err = send(capsys, request_id, "--confirm", confirm, "--dir", str(blocker / "verdicts"))
+    assert code == change_review.EXIT_REFUSED and "sent but could not be saved" in err
+    assert Verdict.model_validate_json(out.split("\n", 1)[1]).status == "verified"
+    assert (folder / ".sending").exists() and jury.calls == 3
+
+    assert send(capsys, request_id, "--confirm", confirm)[0] == change_review.EXIT_REFUSED and jury.calls == 3
+    assert main(["change", "status"]) == 0
+    assert f"Send started, no saved verdict (interrupted or failed to save): {request_id}" in capsys.readouterr().out
+
+
 def test_send_json_prints_the_verdict(git_repo, jury, capsys):
     prepare(capsys)
     request_id, confirm, _ = pending(git_repo)
@@ -297,7 +335,7 @@ def test_send_json_prints_the_verdict(git_repo, jury, capsys):
 def test_status_reports_current_stale_and_committed(git_repo, jury, capsys):
     capsys.readouterr()
     assert main(["change", "status"]) == 0
-    assert "No sent change reviews" in capsys.readouterr().out
+    assert "No saved change reviews" in capsys.readouterr().out
     prepare(capsys)
     request_id, confirm, _ = pending(git_repo)
     send(capsys, request_id, "--confirm", confirm)

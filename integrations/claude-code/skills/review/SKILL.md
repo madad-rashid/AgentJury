@@ -33,13 +33,13 @@ other model providers. The user decides what is sent and sends it themselves.
 2. **Confirm.** From the changed files above, propose the ones that belong to
    this task; files marked "not sent" are excluded automatically. Use
    AskUserQuestion to confirm both the task text and the file list. Use only
-   what the user approves.
+   what the user approves. Write the confirmed task text to
+   `.agentjury/changes/drafts/task.md`.
 3. **Test evidence (optional).** If tests are relevant, ask whether to include
    their output. If the user agrees, run the project's test command and redirect
    its combined output to `.agentjury/changes/drafts/tests.txt`. Never write,
    edit or summarize test output yourself.
-4. **Prepare.** Write the confirmed task text to
-   `.agentjury/changes/drafts/task.md`, then run:
+4. **Prepare.** Run:
 
    `agentjury change prepare --task-file .agentjury/changes/drafts/task.md --path <file> [--path <file> ...] [--test-log .agentjury/changes/drafts/tests.txt] --framework claude-code --agent claude-code --producer-provider anthropic`
 
