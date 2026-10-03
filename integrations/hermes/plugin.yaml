@@ -12,7 +12,7 @@ provides_hooks:
   - post_tool_call
   - pre_llm_call
 python_dependencies:
-  - "agentjury @ git+https://github.com/madad-rashid/AgentJury.git@fix/review-integrity"
+  - "agentjury @ git+https://github.com/madad-rashid/AgentJury.git@3023b96cadf7056076beb94e6dbbd9e3395858a8"
   - "openai>=1.55.3"
   - "anthropic>=1.11.0"
 config_schema:

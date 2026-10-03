@@ -110,6 +110,6 @@ Use the clearest frame from the verdict as the thumbnail. Keep the first public 
 
 This is a demonstration scenario, not measured reviewer accuracy. Live votes and
 timing can differ; prompt excerpts cannot prove the finding's interpretation.
-Use matching draft core/plugin versions and non-private test content. Recording
+Use matching guarded core/plugin versions and non-private test content. Recording
 a live-provider demo requires separately authorized inference. See
 [evaluation](EVALUATION.md) and [security](SECURITY.md).

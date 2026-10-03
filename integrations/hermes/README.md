@@ -1,6 +1,6 @@
 # AgentJury for Hermes
 
-Every substantial Hermes response is peer-reviewed by an independent panel of
+Eligible substantial Hermes responses are submitted to a blind panel of
 AI judges. Verdicts are saved, written into the frontmatter of eligible markdown
 snapshots Hermes produced that turn, and, if revision is needed, fed
 back to Hermes at the start of the next turn.
@@ -24,9 +24,13 @@ The home directory is the one containing Hermes's `config.yaml` and `.env`
 (on Windows often `%LOCALAPPDATA%\hermes`, on Linux/macOS usually `~/.hermes`).
 
 1. Install AgentJury and the judge SDKs into Hermes's Python. If the venv was made by `uv`:
-   `uv pip install --python <hermes-venv>/Scripts/python.exe "agentjury[all] @ git+https://github.com/madad-rashid/AgentJury.git@fix/review-integrity"`
-   otherwise `<hermes-python> -m pip install ...` with the same packages.
-2. Link or copy this folder from the same branch to `<hermes-home>/plugins/agentjury/`
+   `uv pip install --reinstall-package agentjury --python <hermes-venv>/Scripts/python.exe "agentjury[all] @ git+https://github.com/madad-rashid/AgentJury.git@3023b96cadf7056076beb94e6dbbd9e3395858a8"`
+   otherwise `<hermes-python> -m pip install --force-reinstall ...` with the same packages.
+   Reinstall explicitly: both the source pin and old PyPI build report 0.4.4.
+   Verify `<hermes-python> -c "import agentjury; print(agentjury.SCHEMA_VERSION)"` prints `0.7`.
+2. Link or copy the updated plugin folder from this release-readiness PR (or
+   `main` after merge), not the older plugin folder at the pinned core commit,
+   to `<hermes-home>/plugins/agentjury/`
    (Windows: `mklink /J <hermes-home>\plugins\agentjury <path-to-this-folder>`).
 3. Add `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, and `ANTHROPIC_WORKSPACE_ID` if your key needs it,
    to `<hermes-home>/.env`.
@@ -37,11 +41,13 @@ The home directory is the one containing Hermes's `config.yaml` and `.env`
 
 ## Configure
 
-This integration requires the matching schema 0.7 draft core; copying this
-folder while retaining the older PyPI package will not work. Its manifest
-temporarily points to `fix/review-integrity` and installs the vendor SDKs for
-the default panel. Replace the branch reference with the actual released
-package requirement when these changes are released. Native-only core routes
+This integration requires the matching schema 0.7 core; the older PyPI 0.4.4
+package lacks its coverage fields. The manifest pins immutable guarded commit
+`3023b96cadf7056076beb94e6dbbd9e3395858a8` and installs vendor SDKs for the
+default panel. That source pin still reports historical version 0.4.4 but
+includes the restored preset guard. After confirmed PyPI 0.5.0 publication,
+replace the Git dependency with `agentjury>=0.5.0,<0.6` and update install guidance.
+Version 0.5.0 has not been published yet. Native-only core routes
 do not themselves require either SDK. See [migration](../../docs/MIGRATION.md)
 and [providers](../../docs/PROVIDERS.md) for defaults and compatibility.
 

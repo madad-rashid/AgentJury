@@ -1,8 +1,16 @@
-# AgentJury — unreleased branch changes
+# AgentJury 0.5.0 - release candidate notes
 
-These changes consolidate the draft provider and free-jury branches on
-`fix/review-integrity`. They have not been merged or published to PyPI.
+These changes are merged into `main` and prepared for a 0.5.0 public-alpha
+release. Version 0.5.0 has not been published to PyPI yet.
 The current published v0.4.4 release notes remain a record of that release.
+
+Both package version locations are prepared as 0.5.0. Before publication,
+Hermes uses immutable guarded core commit
+`3023b96cadf7056076beb94e6dbbd9e3395858a8`, whose historical metadata is 0.4.4.
+After confirmed PyPI publication, switch its dependency to
+`agentjury>=0.5.0,<0.6` and update installation guidance in a follow-up.
+Publishing requires separate approval and maintainer verification of the PyPI
+trusted publisher and GitHub `pypi` environment; these settings are unverified.
 
 - Restore fixed-model validation for native and SDK OpenRouter routes, including
   direct SDK judge construction. Reject preset references before transport
@@ -21,7 +29,7 @@ The current published v0.4.4 release notes remain a record of that release.
   including retries and repair requests.
 - Added the `source_audit` role for source and as-of-date checks when a task
   explicitly asks for a source.
-- Moved the reviewer rubric to 0.5. The `critic` role is skeptical without
+- Updated the reviewer rubric through 0.5/0.6 to current policy 0.7. The `critic` role is skeptical without
   assuming every answer is flawed. Findings require checked excerpts; invalid
   evidence can make a review unavailable. Repair prompts no longer echo the
   malformed reply. Verdicts can therefore change under the new rubric.
@@ -47,7 +55,7 @@ The current published v0.4.4 release notes remain a record of that release.
   Development extras include SDKs for realistic offline response-shape tests;
   native transports still have no SDK runtime dependency.
 - Added provider, security, evaluation and schema/configuration migration guides,
-  aligned Hermes dependencies and environment examples with this draft branch,
+  aligned Hermes dependencies with an immutable guarded core pin,
   and corrected the demonstration's blocking/severity semantics.
 
 - Artifact-bearing requests now present explicit JSON source IDs and coverage;
@@ -55,7 +63,7 @@ The current published v0.4.4 release notes remain a record of that release.
   unchanged. Rubric/input policy 0.6 versions all reviewer configuration IDs.
 - A small frozen local ablation favored source presentation, not targeted repair;
   original-file and security failures remain. See the validation report before
-  treating this draft as a production reviewer.
+  treating this alpha as a production reviewer.
 
 - Review policy 0.7 permits one retry only for unreadable JSON. Readable invalid
   opinion schemas or failed evidence produce an unavailable judge without

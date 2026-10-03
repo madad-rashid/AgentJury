@@ -1,21 +1,35 @@
-# Draft consolidation migration
+# Migration to the 0.5.0 public alpha
 
-This guide applies to `fix/review-integrity`, combining PR 5's free-jury process
-with PRs 6/7's native transports and integrity fixes. It is a draft, not a PyPI
-release. Existing implementation PRs remain open for comparison.
+Provider and integrity changes are merged into `main`; version 0.5.0 is being
+prepared, not published. PRs 6/7 are closed as superseded by PRs 8/9. Until
+publication, the immutable guarded core below provides the matching behavior
+while retaining its historical metadata version 0.4.4. It differs from PyPI
+0.4.4, which lacks these changes.
 
 ```bash
-pip install "agentjury[all] @ git+https://github.com/madad-rashid/AgentJury.git@fix/review-integrity"
+pip install --force-reinstall "agentjury[all] @ git+https://github.com/madad-rashid/AgentJury.git@3023b96cadf7056076beb94e6dbbd9e3395858a8"
 ```
 
-From a matching checkout, `pip install -e ".[all,dev]"` prepares offline
-development. Native-only applications may install core without `[all]` and use
+The reinstall above replaces an existing PyPI 0.4.4; verify
+`python -c "import agentjury; print(agentjury.SCHEMA_VERSION)"` prints `0.7`.
+Check source provenance too:
+
+```bash
+python -c "import importlib.metadata as m, json; print(json.loads(m.distribution('agentjury').read_text('direct_url.json'))['vcs_info']['commit_id'])"
+```
+
+It must print `3023b96cadf7056076beb94e6dbbd9e3395858a8` for the pinned
+installation. Schema alone does not establish that the preset guard is present.
+Use the updated plugin folder from this release-readiness PR or `main` after
+merge, not the older plugin manifest at the pinned core commit. From a matching
+checkout, `pip install -e ".[all,dev]"` prepares offline development.
+Native-only applications may install core without `[all]` and use
 Ollama/OpenRouter without SDK runtime dependencies. Development extras include
 SDKs for realistic offline response tests. Core requires Python 3.11+.
 
 ## Configuration changes
 
-| Earlier configuration | Draft behavior / action |
+| Earlier configuration | New behavior / action |
 | --- | --- |
 | `role:openai` / `role:anthropic` | Preserved; explicit model forms also work |
 | PR 5 SDK OpenRouter/Ollama routes | Public factories select native transports; old reports remain readable but configuration IDs change |
@@ -51,9 +65,11 @@ every injected case blocked; earlier suggestions may no longer qualify.
 
 ## Hermes and human grading
 
-Install core and plugin from the same branch. The draft manifest pins its core
-dependency to this branch because older released cores lack coverage fields.
-After an actual release, replace that direct Git reference with the new version.
+Install a matching guarded core and plugin. The manifest pins core to immutable
+commit `3023b96cadf7056076beb94e6dbbd9e3395858a8`, including the restored preset guard.
+After confirmed PyPI publication, replace that Git dependency with
+`agentjury>=0.5.0,<0.6` in a follow-up and use the same requirement in install
+guidance. Do not make that switch while PyPI 0.5.0 is unavailable.
 The manifest retains SDK dependencies for its default vendor panel.
 
 Partial/omitted/changed/superseded files receive no new certification. Current
