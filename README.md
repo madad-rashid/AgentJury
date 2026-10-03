@@ -33,19 +33,24 @@ Open an issue at <https://github.com/madad-rashid/AgentJury/issues>. Please do n
 
 ## Quick start
 
-The PyPI quick start below uses the published package. Native providers,
-benchmark and integrity changes described here are on the draft
-`fix/review-integrity` branch. To test the combined changes before a release:
+Version 0.5.0 is being prepared and is not published to PyPI yet. Native
+providers, benchmarking and integrity changes are merged into `main`. Until
+publication, install the immutable guarded core:
 
 ```bash
-pip install "agentjury[all] @ git+https://github.com/madad-rashid/AgentJury.git@fix/review-integrity"
+pip install --force-reinstall "agentjury[all] @ git+https://github.com/madad-rashid/AgentJury.git@3023b96cadf7056076beb94e6dbbd9e3395858a8"
 ```
 
-Use the matching plugin folder from that branch for Hermes. See the
+This pin includes schema/review policy 0.7 and the provider safeguard, but
+reports its historical package version 0.4.4. It differs from the older PyPI
+0.4.4 build. Reinstallation replaces an already-installed PyPI 0.4.4. Verify
+`python -c "import agentjury; print(agentjury.SCHEMA_VERSION)"` prints `0.7`.
+For Hermes, copy the updated plugin folder from this release-readiness PR
+(or `main` after it merges), not the folder at the older pinned core commit. See the
 [migration guide](docs/MIGRATION.md), [provider guide](docs/PROVIDERS.md),
 [security boundaries](docs/SECURITY.md) and [evaluation guide](docs/EVALUATION.md).
 
-Install AgentJury from PyPI:
+The published PyPI package is currently 0.4.4 and lacks the new features:
 
 ```bash
 pip install "agentjury[all]"
@@ -96,8 +101,8 @@ retrieve the source or establish that its contents support the claim.
 
 ### One key or a local model
 
-OpenRouter and local-model support is available on the draft branch described
-above. From a checkout of that branch, install with `pip install -e ".[all]"`.
+OpenRouter and local-model support is available in the guarded source install
+above. From a checkout of current `main`, install with `pip install -e ".[all]"`.
 [OpenRouter](https://openrouter.ai/docs/quickstart) needs one
 `OPENROUTER_API_KEY` even when the panel uses models from different vendors:
 
@@ -365,7 +370,8 @@ agentjury review task.md output.md \
 
 ### Hermes Agent
 
-`integrations/hermes/` contains the first live integration. It reviews substantial Hermes responses in the background, saves verdicts, writes verdict metadata into markdown frontmatter, and feeds major findings back on the next relevant turn.
+`integrations/hermes/` contains the first live integration. It reviews substantial Hermes responses in the background, saves verdicts, writes verdict metadata into markdown frontmatter, and feeds major findings back once on the next session turn, without inferring task lineage.
+Disable feedback for unrelated tasks sharing a session.
 
 See [integrations/hermes/README.md](integrations/hermes/README.md) for installation and configuration.
 
@@ -404,6 +410,10 @@ Public alpha. The core aggregation rules are intentionally stable while real ver
 
 The next research step is reviewer reputation by task type using human-adjudicated findings, followed by diversity weighting from observed disagreement patterns.
 
+Injection defenses remain experimental: recorded local probes approved an
+injected artifact and falsely revised an inert quotation. Checked excerpts do
+not prove interpretation. See [security limits](docs/SECURITY.md).
+
 ## Roadmap
 
 - [x] Protocol schema
@@ -412,7 +422,7 @@ The next research step is reviewer reputation by task type using human-adjudicat
 - [x] CLI: `agentjury review task.md output.md`
 - [x] Hermes integration
 - [x] Review-event schema with telemetry and adjudication slots
-- [x] Quorum, non-unilateral blocking, prompt-injection defence, custom roles
+- [x] Quorum, non-unilateral blocking, limited injection guards, custom roles
 - [x] Abstain vote, provider floor, retry, repair, timeouts, CI
 - [x] Human finding-level adjudication and append-only adjudication history
 - [x] PyPI release

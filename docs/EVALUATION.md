@@ -71,4 +71,4 @@ human grading of individual findings, and repeated runs under exact model/route
 identities. Report false approvals, false rejections, abstentions/unavailability,
 blocking recall, cost, latency and shared-error patterns. Model versions may
 change behind aliases. Confidence/reputation weighting and hard whole-panel
-deadlines remain separate design work, not validated features of this draft.
+deadlines remain separate design work, not validated features of this public alpha.

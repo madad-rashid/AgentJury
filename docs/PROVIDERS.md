@@ -1,7 +1,7 @@
 # Provider routes
 
-This guide describes the repository provider implementation and the unreleased
-fixed-model safeguard follow-up, not the older published package. See
+This guide describes the merged repository provider implementation for the upcoming
+0.5.0 public alpha, not the older published package. See
 [migration](MIGRATION.md) for source installation guidance.
 Panel syntax is `role:provider[:model]`, shared by the CLI and Hermes. Empty
 entries and a trailing comma are tolerated; an empty panel is rejected.
