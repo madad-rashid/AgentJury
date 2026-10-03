@@ -4,18 +4,22 @@ This checklist keeps package identity, Git tags, GitHub Releases, and PyPI align
 
 ## Current release note
 
-Package metadata is prepared as `0.5.0`; the published release remains `0.4.4`.
-This preparation does not authorize publishing. After the release-readiness PR
-is merged, separately authorize publication, confirm `0.5.0` is still unused on
-GitHub and PyPI, and rebuild fresh artifacts from the exact approved commit.
-Never reuse older validation artifacts or move an existing release tag.
+Version 0.5.0 is published on [PyPI](https://pypi.org/project/agentjury/0.5.0/)
+and [GitHub](https://github.com/madad-rashid/AgentJury/releases/tag/v0.5.0)
+from commit `8aa02e1c5e9dc96149c1b99a5dc66e96d5a6770b`.
+All eight post-merge CI jobs passed. The release-triggered
+[publishing run](https://github.com/madad-rashid/AgentJury/actions/runs/37129743709)
+succeeded through the existing `pypi` environment and OIDC workflow, with an
+explicit approval for that deployment. Both artifact hashes, exact release
+code, a clean PyPI installation, CLI and offline Hermes compatibility were checked.
+This establishes successful publication; it does not imply ongoing service-side
+settings audits or general model accuracy.
 
-The normal publication route is `.github/workflows/publish.yml`: publishing a
-GitHub Release triggers a tag/version check, source/wheel build, and PyPI trusted
-publication using the `pypi` environment and OIDC. Before publishing, a maintainer
-must confirm the PyPI trusted publisher matches this repository, workflow and
-environment, and that any environment approvals are configured as intended.
-Those service-side settings have not been verified by this preparation.
+The normal route remains `.github/workflows/publish.yml`. Future releases require
+their own approval, unused version/tag checks, exact-commit tests and fresh builds.
+Do not reuse older validation artifacts, move `v0.5.0`, or upload that version
+again. Repository installation/manifest updates do not replace the published
+wheel, sdist or PyPI README snapshot; changing those requires a new patch release.
 
 ## One-time PyPI setup
 
@@ -78,11 +82,12 @@ same version manually and through the release-triggered workflow.
 
 ## GitHub tag and Release
 
-Only after tests and package validation succeed:
+For a new, approved version only, after tests and package validation succeed
+(replace `<new-version>`; `v0.5.0` already exists):
 
 ```bash
-git tag -a v0.5.0 -m "AgentJury v0.5.0 public alpha"
-git push origin v0.5.0
+git tag -a "v<new-version>" -m "AgentJury v<new-version> public alpha"
+git push origin "v<new-version>"
 ```
 
 Create a GitHub Release from the new tag using finalized notes derived from
@@ -92,16 +97,18 @@ Do not retag an existing version. If a release mistake is found after publicatio
 
 ## After PyPI publication
 
-Update README installation instructions from the GitHub direct install to:
+Keep README installation instructions aligned with the released compatibility
+range. For the current 0.5 series:
 
 ```bash
-pip install "agentjury[all]"
+python -m pip install "agentjury[all]>=0.5.0,<0.6"
 ```
 
-Then verify:
+Then verify the exact newly published version in a fresh environment
+(replace `<new-version>`):
 
 ```bash
-pip install "agentjury[all]==0.5.0"
+python -m pip install "agentjury[all]==<new-version>"
 agentjury roles
 ```
 
@@ -114,12 +121,13 @@ agentjury roles
 ## Existing automation and publication transition
 
 Use the existing GitHub Release-triggered trusted-publishing workflow as the
-normal route. The build job verifies the tag equals `v0.5.0`; it does not replace
-the full offline suite, package checks and exact-commit CI before release approval.
+normal route. The build job verifies the tag matches the package metadata
+version; it does not replace the full offline suite, package checks and
+exact-commit CI before release approval.
 
-After successful PyPI publication, verify both artifacts and installation from
-PyPI. In a follow-up, change the Hermes manifest's immutable guarded Git pin to
-`agentjury>=0.5.0,<0.6` and align README/migration/Hermes installation guidance.
-Before that confirmation, retain the source pin; do not claim an unavailable
-PyPI version is installable. The pin's metadata version is historical 0.4.4,
-but its source includes schema/policy 0.7 and the restored preset safeguard.
+After every successful PyPI publication, verify both artifacts and a clean
+installation from PyPI. Following confirmed 0.5.0 publication, the Hermes
+manifest uses `agentjury>=0.5.0,<0.6`; README, migration and Hermes guidance
+use the published package and explain targeted reinstallation and separate plugin
+folder installation. Existing Hermes environments are not changed by this
+repository transition. Historical Git pins and release artifacts remain intact.

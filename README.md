@@ -33,28 +33,22 @@ Open an issue at <https://github.com/madad-rashid/AgentJury/issues>. Please do n
 
 ## Quick start
 
-Version 0.5.0 is being prepared and is not published to PyPI yet. Native
-providers, benchmarking and integrity changes are merged into `main`. Until
-publication, install the immutable guarded core:
+Version 0.5.0 is published on [PyPI](https://pypi.org/project/agentjury/0.5.0/)
+with native providers, benchmarking, schema/review policy 0.7 and the provider
+safeguards. Install the public alpha:
 
 ```bash
-pip install --force-reinstall "agentjury[all] @ git+https://github.com/madad-rashid/AgentJury.git@3023b96cadf7056076beb94e6dbbd9e3395858a8"
+python -m pip install "agentjury[all]>=0.5.0,<0.6"
 ```
 
-This pin includes schema/review policy 0.7 and the provider safeguard, but
-reports its historical package version 0.4.4. It differs from the older PyPI
-0.4.4 build. Reinstallation replaces an already-installed PyPI 0.4.4. Verify
-`python -c "import agentjury; print(agentjury.SCHEMA_VERSION)"` prints `0.7`.
-For Hermes, copy the updated plugin folder from this release-readiness PR
-(or `main` after it merges), not the folder at the older pinned core commit. See the
-[migration guide](docs/MIGRATION.md), [provider guide](docs/PROVIDERS.md),
-[security boundaries](docs/SECURITY.md) and [evaluation guide](docs/EVALUATION.md).
-
-The published PyPI package is currently 0.4.4 and lacks the new features:
-
-```bash
-pip install "agentjury[all]"
-```
+Native-only applications can omit `[all]`. Existing Git or editable installations
+may satisfy the same version requirement without switching to PyPI; follow the
+explicit reinstall and provenance checks in the [migration guide](docs/MIGRATION.md).
+For Hermes, install the core into Hermes's Python and separately copy or link
+the updated `integrations/hermes` plugin folder from `main`. The core wheel
+does not install the plugin folder. See the [Hermes instructions](integrations/hermes/README.md),
+[provider guide](docs/PROVIDERS.md), [security boundaries](docs/SECURITY.md)
+and [evaluation guide](docs/EVALUATION.md).
 
 Set `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` in your environment or a local `.env` file, then review an agent output:
 

@@ -1,31 +1,52 @@
 # Migration to the 0.5.0 public alpha
 
-Provider and integrity changes are merged into `main`; version 0.5.0 is being
-prepared, not published. PRs 6/7 are closed as superseded by PRs 8/9. Until
-publication, the immutable guarded core below provides the matching behavior
-while retaining its historical metadata version 0.4.4. It differs from PyPI
-0.4.4, which lacks these changes.
+Version 0.5.0 is published on [PyPI](https://pypi.org/project/agentjury/0.5.0/).
+It includes schema/review policy 0.7 and the restored preset safeguard. The old
+temporary Git pin `3023b96cadf7056076beb94e6dbbd9e3395858a8` reported historical
+version 0.4.4; the older PyPI 0.4.4 package lacks these changes.
+
+## Install or switch to PyPI
+
+For a fresh environment, install:
 
 ```bash
-pip install --force-reinstall "agentjury[all] @ git+https://github.com/madad-rashid/AgentJury.git@3023b96cadf7056076beb94e6dbbd9e3395858a8"
+python -m pip install "agentjury[all]>=0.5.0,<0.6"
 ```
 
-The reinstall above replaces an existing PyPI 0.4.4; verify
-`python -c "import agentjury; print(agentjury.SCHEMA_VERSION)"` prints `0.7`.
-Check source provenance too:
+An existing Git/editable package reporting 0.5.0 can already satisfy this
+requirement without being replaced. To switch explicitly to the released wheel,
+reinstall only AgentJury, then ensure dependencies and SDKs are present:
 
 ```bash
-python -c "import importlib.metadata as m, json; print(json.loads(m.distribution('agentjury').read_text('direct_url.json'))['vcs_info']['commit_id'])"
+python -m pip install --force-reinstall --no-deps --index-url https://pypi.org/simple "agentjury==0.5.0"
+python -m pip install "agentjury[all]>=0.5.0,<0.6"
+python -m pip check
 ```
 
-It must print `3023b96cadf7056076beb94e6dbbd9e3395858a8` for the pinned
-installation. Schema alone does not establish that the preset guard is present.
-Use the updated plugin folder from this release-readiness PR or `main` after
-merge, not the older plugin manifest at the pinned core commit. From a matching
-checkout, `pip install -e ".[all,dev]"` prepares offline development.
-Native-only applications may install core without `[all]` and use
-Ollama/OpenRouter without SDK runtime dependencies. Development extras include
-SDKs for realistic offline response tests. Core requires Python 3.11+.
+With `uv`, use `uv pip install --reinstall-package agentjury --python <target-python> "agentjury[all]>=0.5.0,<0.6"`.
+For Hermes, `<target-python>` is Hermes's interpreter, not an unrelated system
+Python. Restart Hermes after upgrading an already-loaded package.
+
+Verify with that same interpreter:
+
+```bash
+python -c "import agentjury, importlib.metadata as m; print(m.version('agentjury'), agentjury.__version__, agentjury.SCHEMA_VERSION); print(agentjury.__file__); print(m.distribution('agentjury').read_text('direct_url.json'))"
+```
+
+For the exact 0.5.0 reinstall, expect `0.5.0 0.5.0 0.7`, an import path inside
+the intended environment, and `None` for `direct_url.json`. Index-installed
+packages normally have no direct URL metadata; VCS/editable installs record their
+source there. Absence alone does not authenticate a package: use the explicit
+PyPI index above, and check the import path for checkout shadowing.
+
+The Hermes plugin folder is installed separately from the core wheel. Copy or
+link `integrations/hermes` from updated `main` into Hermes's plugin directory;
+reinstalling core does not refresh an older copied plugin. See the
+[Hermes install guide](../integrations/hermes/README.md).
+From a matching checkout, `pip install -e ".[all,dev]"` prepares offline
+development, not a PyPI provenance check. Native-only applications can omit
+`[all]`; Ollama/OpenRouter need no SDK runtime dependencies. Core requires
+Python 3.11+.
 
 ## Configuration changes
 
@@ -65,12 +86,10 @@ every injected case blocked; earlier suggestions may no longer qualify.
 
 ## Hermes and human grading
 
-Install a matching guarded core and plugin. The manifest pins core to immutable
-commit `3023b96cadf7056076beb94e6dbbd9e3395858a8`, including the restored preset guard.
-After confirmed PyPI publication, replace that Git dependency with
-`agentjury>=0.5.0,<0.6` in a follow-up and use the same requirement in install
-guidance. Do not make that switch while PyPI 0.5.0 is unavailable.
-The manifest retains SDK dependencies for its default vendor panel.
+Install published core `agentjury>=0.5.0,<0.6` and the updated plugin folder
+separately. The manifest retains SDK dependencies for its default vendor panel.
+Use the installation and provenance checks above when replacing Git or editable
+installations; version/schema alone do not prove an environment switched to PyPI.
 
 Partial/omitted/changed/superseded files receive no new certification. Current
 generation skipped annotations are invalidated best effort. Read coverage,

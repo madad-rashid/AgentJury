@@ -1,16 +1,17 @@
-# AgentJury 0.5.0 - release candidate notes
+# AgentJury 0.5.0 - published release and repository follow-up
 
-These changes are merged into `main` and prepared for a 0.5.0 public-alpha
-release. Version 0.5.0 has not been published to PyPI yet.
-The current published v0.4.4 release notes remain a record of that release.
+Version 0.5.0 was published to PyPI on 2026-10-03 from commit
+`8aa02e1c5e9dc96149c1b99a5dc66e96d5a6770b`. The
+[GitHub release](https://github.com/madad-rashid/AgentJury/releases/tag/v0.5.0)
+and its artifacts remain unchanged, as do the historical v0.4.4 release notes.
 
-Both package version locations are prepared as 0.5.0. Before publication,
-Hermes uses immutable guarded core commit
-`3023b96cadf7056076beb94e6dbbd9e3395858a8`, whose historical metadata is 0.4.4.
-After confirmed PyPI publication, switch its dependency to
-`agentjury>=0.5.0,<0.6` and update installation guidance in a follow-up.
-Publishing requires separate approval and maintainer verification of the PyPI
-trusted publisher and GitHub `pypi` environment; these settings are unverified.
+Repository follow-up: Hermes now requires `agentjury>=0.5.0,<0.6` instead of
+the temporary guarded Git pin. Install guidance describes explicit core
+reinstallation/provenance checks and separate plugin-folder installation.
+These documentation/manifest changes do not update an installed Hermes environment
+or the immutable PyPI README/sdist snapshot, and do not constitute another release.
+
+The 0.5.0 release included:
 
 - Restore fixed-model validation for native and SDK OpenRouter routes, including
   direct SDK judge construction. Reject preset references before transport
