@@ -7,10 +7,12 @@ Command-line interface.
     agentjury verdicts [--dir DIR] [-n N]
     agentjury adjudicate ID [--judge J] [--finding N LABEL]... [--verdict agree|partial|disagree]
                             [--producer-verdict correct|flawed] [--note TEXT] [--dir DIR]
+    agentjury change candidates|prepare|send|status ...   (see agentjury/change_review.py)
 
 Verdicts are read from --dir, else $AGENTJURY_VERDICT_DIR, else .agentjury/verdicts.
 
 Exit codes: 0 verified, 1 needs_revision, 2 blocked, 3 insufficient_jury.
+`agentjury change` adds 6 for a refusal (nothing sent) and 7 for a stale review.
 
 TASK and OUTPUT are files (or "-" to read OUTPUT from stdin).
 PANEL is a comma-separated list of role:provider[:model] entries, for example
@@ -33,8 +35,10 @@ from uuid import uuid4
 from dotenv import load_dotenv
 
 from .judges import ROLES, load_roles
+from . import __version__, SCHEMA_VERSION
 from . import panel_config
 from . import benchmark
+from . import change_review
 from .benchmark_audit import audit_report
 from .benchmark_cases import load_cases
 from .benchmark_score import score
@@ -464,6 +468,8 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.reconfigure(errors="backslashreplace")
     load_dotenv()
     parser = argparse.ArgumentParser(prog="agentjury", description="Peer review for AI agent output.")
+    parser.add_argument("--version", action="version",
+                        version=f"agentjury {__version__} (schema {SCHEMA_VERSION})")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p = sub.add_parser("review", help="Review an agent's output with a panel of judges.")
@@ -525,6 +531,8 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("report", type=Path, help="Saved benchmark JSON report.")
     a.add_argument("--json", action="store_true", help="Print structured audit data.")
     a.set_defaults(func=cmd_benchmark_audit)
+
+    change_review.add_parser(sub)
 
     args = parser.parse_args(argv)
     return args.func(args)
