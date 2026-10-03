@@ -33,7 +33,8 @@ python -m pytest tests -q
 ```
 
 The normal test suite blocks network endpoints except ephemeral test servers.
-Keep `AGENTJURY_LIVE=0` for offline validation. Native-route tests must mock the
+Keep `AGENTJURY_LIVE=0` for offline validation. Change-review tests create
+temporary Git repositories and need `git` on `PATH`; without it they are skipped. Native-route tests must mock the
 transport or use their test HTTP server; never assume an absent SDK prevents a
 native route from calling a local model.
 
@@ -141,7 +142,14 @@ A good integration should:
 
 Do not put framework-specific behavior into the aggregation core unless the protocol itself requires a change.
 
-The Hermes adapter in `integrations/hermes/` is the reference integration.
+The Hermes adapter in `integrations/hermes/` is the reference integration for
+automatic review. `integrations/claude-code/` is the reference for explicit,
+user-confirmed review: a Claude Code plugin of Markdown skills and a hook around
+the framework-independent `agentjury change` commands. Its
+`.claude-plugin/plugin.json` sets `version`, which pins installed users to that
+version, so increase it whenever plugin files change. Run
+`claude plugin validate --strict integrations/claude-code` and
+`claude plugin validate --strict .` if you have Claude Code.
 
 ## Testing expectations
 

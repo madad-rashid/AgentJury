@@ -80,6 +80,63 @@ External writers and separate plugin processes do not share the lock, and a
 check followed by replacement is not an atomic filesystem compare-and-swap.
 Consumers must validate current content and run identity before trusting metadata.
 
+## Code-change reviews
+
+`agentjury change prepare` reads the repository locally and sends nothing. It
+selects changed tracked files and untracked files that Git does not ignore;
+selections must name changed paths inside the work tree. `.git/` and
+`.agentjury/` are never included. Without reading their contents, it leaves out
+files whose names indicate secrets (`.env*` except example, sample, template or
+dist files; key and certificate files; credential stores such as `.npmrc`,
+`.pypirc`, `.netrc`, `*.tfvars` and `*.tfstate`; `.ssh/`, `.gnupg/`,
+`.aws/credentials`, `.docker/config.json`, `.kube/config` and
+`.claude/settings.local.json`), symlinks (never followed), submodules,
+lockfiles and unmerged files. Binary or non-UTF-8 content and diffs over the
+per-file cap are also left out. Every omission is listed with its reason, and
+the reviewers' scope notes name omitted paths without their contents.
+
+A deterministic scan covers everything user-controlled that would be sent: the
+task, each file's diff including removed and context lines, and the test log.
+It looks for private-key blocks, common provider token formats, quoted
+credential assignments and exact values of environment variables whose names
+contain words such as KEY, TOKEN, SECRET, PASSWORD or AUTH. A match refuses the
+preparation and is reported by source, line and rule (for a diff, the line
+within that file's diff), never by value. `--allow-secret ID` accepts one
+reported match for one preparation only. The scan is heuristic: a credential
+without a recognizable shape passes it, so check the preview.
+
+Task files and test logs must be regular files inside the repository with
+names that do not indicate secrets. AgentJury never runs commands, so
+pre-approving `prepare` in an agent cannot approve arbitrary execution. Test
+logs are supplied evidence that AgentJury did not produce and cannot tie to the
+reviewed bytes; logs older than the latest edit to a reviewed file are flagged.
+Terminal escape sequences and control characters are removed from logs, and
+model-written text is escaped when displayed.
+
+`send` submits only the saved, previewed payload. It refuses before any provider
+call when the confirmation code does not match the payload digest, the bundle
+was edited, a reviewed file's bytes changed, the reviewer configuration (roles,
+models, parameters, endpoint hosts or quorum) changed, the bundle was already
+used or interrupted, or an identical payload was already reviewed. The digest
+is a consistency check against accidental change, not a signature: anyone who
+can write the repository can also prepare a different review.
+
+The Claude Code plugin keeps the send step with the user. Its skills are
+user-invoked only, never pre-approve `send`, and its `PreToolUse` hook denies
+Claude-initiated `agentjury change send` commands, including through
+`python -m agentjury.cli`. Hook and permission matching use command text; Claude
+Code documents that this is not a security boundary around a program. The hook
+prevents accidental or unrequested sends; it does not stop deliberate evasion.
+A hook returning `ask` would not prompt in `bypassPermissions`, `dontAsk`, `-p` or
+subagent contexts, so the plugin denies instead.
+
+Prepared and sent reviews, including the full diff that was sent, stay under
+`.agentjury/` in the repository root. When Git does not already ignore it,
+`prepare` adds a self-ignoring `.agentjury/.gitignore`. Nothing is written into
+reviewed files. The diff in `output` is subject to the local reviewer-command
+guard, so code that addresses reviewers, such as tests of this project, can
+become `needs_revision` with a visible warning.
+
 ## Human adjudication
 
 All requested references/labels are validated before persistence. A directory
