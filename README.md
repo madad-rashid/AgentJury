@@ -95,8 +95,9 @@ retrieve the source or establish that its contents support the claim.
 
 ### One key or a local model
 
-OpenRouter and local-model support is available in the guarded source install
-above. From a checkout of current `main`, install with `pip install -e ".[all]"`.
+OpenRouter and local-model support is included in the published 0.5.0 install
+above. To work from a checkout of current `main` instead, install with
+`pip install -e ".[all]"`.
 [OpenRouter](https://openrouter.ai/docs/quickstart) needs one
 `OPENROUTER_API_KEY` even when the panel uses models from different vendors:
 
