@@ -23,14 +23,20 @@ Hermes has its own Python environment and its own home directory. Find both firs
 The home directory is the one containing Hermes's `config.yaml` and `.env`
 (on Windows often `%LOCALAPPDATA%\hermes`, on Linux/macOS usually `~/.hermes`).
 
-1. Install AgentJury and the judge SDKs into Hermes's Python. If the venv was made by `uv`:
-   `uv pip install --reinstall-package agentjury --python <hermes-venv>/Scripts/python.exe "agentjury[all] @ git+https://github.com/madad-rashid/AgentJury.git@3023b96cadf7056076beb94e6dbbd9e3395858a8"`
-   otherwise `<hermes-python> -m pip install --force-reinstall ...` with the same packages.
-   Reinstall explicitly: both the source pin and old PyPI build report 0.4.4.
-   Verify `<hermes-python> -c "import agentjury; print(agentjury.SCHEMA_VERSION)"` prints `0.7`.
-2. Link or copy the updated plugin folder from this release-readiness PR (or
-   `main` after merge), not the older plugin folder at the pinned core commit,
-   to `<hermes-home>/plugins/agentjury/`
+1. Install published AgentJury and the judge SDKs into Hermes's Python:
+   `<hermes-python> -m pip install "agentjury[all]>=0.5.0,<0.6"`.
+   If the venv was made by `uv`, use
+   `uv pip install --python <hermes-python> "agentjury[all]>=0.5.0,<0.6"`.
+   When switching an existing Git/editable installation to PyPI, reinstall only
+   AgentJury explicitly: `uv pip install --reinstall-package agentjury --python <hermes-python> "agentjury[all]>=0.5.0,<0.6"`,
+   or `<hermes-python> -m pip install --force-reinstall --no-deps --index-url https://pypi.org/simple "agentjury==0.5.0"`
+   followed by the install command above for SDK/dependency requirements.
+   Verify version `0.5.0`, schema `0.7`, import location and provenance using the
+   [migration checks](../../docs/MIGRATION.md), then run `<hermes-python> -m pip check`.
+   Restart Hermes after replacing a package already loaded by its process.
+2. Separately link or copy `integrations/hermes` from the updated `main` checkout
+   to `<hermes-home>/plugins/agentjury/`. The core wheel does not install this
+   folder; an existing copied plugin is not updated by a core package upgrade.
    (Windows: `mklink /J <hermes-home>\plugins\agentjury <path-to-this-folder>`).
 3. Add `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, and `ANTHROPIC_WORKSPACE_ID` if your key needs it,
    to `<hermes-home>/.env`.
@@ -41,15 +47,12 @@ The home directory is the one containing Hermes's `config.yaml` and `.env`
 
 ## Configure
 
-This integration requires the matching schema 0.7 core; the older PyPI 0.4.4
-package lacks its coverage fields. The manifest pins immutable guarded commit
-`3023b96cadf7056076beb94e6dbbd9e3395858a8` and installs vendor SDKs for the
-default panel. That source pin still reports historical version 0.4.4 but
-includes the restored preset guard. After confirmed PyPI 0.5.0 publication,
-replace the Git dependency with `agentjury>=0.5.0,<0.6` and update install guidance.
-Version 0.5.0 has not been published yet. Native-only core routes
-do not themselves require either SDK. See [migration](../../docs/MIGRATION.md)
-and [providers](../../docs/PROVIDERS.md) for defaults and compatibility.
+This integration requires schema 0.7 and published AgentJury `>=0.5.0,<0.6`.
+The manifest also installs vendor SDKs for the default panel. PyPI 0.5.0 includes
+the preset safeguard; older PyPI 0.4.4 lacks the matching coverage fields.
+Native-only core routes do not themselves require either SDK.
+See [migration](../../docs/MIGRATION.md) and [providers](../../docs/PROVIDERS.md)
+for compatibility and installation provenance checks.
 
 In `<hermes-home>/config.yaml`:
 
@@ -70,8 +73,8 @@ plugins:
 ```
 
 The `panel` setting also accepts explicit `role:provider:model` entries.
-For an OpenRouter-only panel, install the current AgentJury repository checkout
-into Hermes's Python environment, set `OPENROUTER_API_KEY` in Hermes's `.env`,
+For an OpenRouter-only panel, install published AgentJury into Hermes's Python
+environment as above, set `OPENROUTER_API_KEY` in Hermes's `.env`,
 and use:
 
 ```yaml
