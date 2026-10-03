@@ -41,6 +41,9 @@ _PLACEHOLDER_PREFIXES = ("your", "example", "dummy", "fake", "test", "sample", "
 _SECRET_WORDS = frozenset({"KEY", "KEYS", "APIKEY", "TOKEN", "TOKENS", "SECRET", "SECRETS",
                            "PASSWORD", "PASSWD", "CREDENTIAL", "CREDENTIALS", "AUTH", "PAT"})
 _MIN_ENV_VALUE = 12
+# Rooted POSIX or Windows paths (sockets, files) are not secrets. Matched as text,
+# because os.path.isabs differs by platform and Python version.
+_PATH_VALUE = re.compile(r"^(?:[A-Za-z]:)?[\\/]")
 
 
 @dataclass(frozen=True)
@@ -77,8 +80,8 @@ def secret_env_values(environ: Mapping[str, str] | None = None) -> dict[str, str
         if not words & _SECRET_WORDS:
             continue
         candidate = value.strip()
-        if (len(candidate) < _MIN_ENV_VALUE or os.path.isabs(candidate)
-                or re.match(r"^[A-Za-z]:[\\/]", candidate) or candidate.lower() in ("true", "false")):
+        if (len(candidate) < _MIN_ENV_VALUE or _PATH_VALUE.match(candidate)
+                or candidate.lower() in ("true", "false")):
             continue
         values.setdefault(candidate, name)
     return values

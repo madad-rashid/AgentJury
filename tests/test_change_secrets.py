@@ -70,6 +70,15 @@ def test_environment_values_are_matched_by_secret_names_only():
     assert "MY_SERVICE_API_KEY" in matches[0].describe()
 
 
+@pytest.mark.parametrize("isabs", [lambda path: False, lambda path: True])
+def test_path_values_are_skipped_on_every_platform(monkeypatch, isabs):
+    # Python 3.13 on Windows no longer treats "/tmp/x" as absolute; the result must not change.
+    monkeypatch.setattr("os.path.isabs", isabs)
+    environ = {"SSH_AUTH_SOCK": "/tmp/ssh-agent.sock-12345", "CERT_KEY_FILE": "C:\\certs\\service.key",
+               "SHARE_TOKEN_PATH": "\\\\server\\share\\token.txt", "MY_API_KEY": "v4lue-of-a-real-key-123"}
+    assert secret_env_values(environ) == {"v4lue-of-a-real-key-123": "MY_API_KEY"}
+
+
 def test_long_identifiers_scan_quickly():
     import time
     text = "_".join(["segment"] * 40_000) + " = 1\n"
