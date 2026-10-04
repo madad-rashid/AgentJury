@@ -76,7 +76,7 @@ agentjury review task.md output.md \
   --panel accuracy:openai,critic:anthropic,evidence:anthropic,executive:openai
 ```
 
-Run `agentjury roles` to see the built-in roles. Every verdict is saved to `.agentjury/verdicts/`.
+Run `agentjury roles` to see the built-in roles. Every verdict is saved to `.agentjury/verdicts/`, or to `--dir` or `AGENTJURY_VERDICT_DIR` when set.
 Findings must cite short excerpts from the task, context, output, artifacts, or
 reviewer rule. AgentJury checks each excerpt against that source, allowing
 only whitespace, common quote and dash, and Unicode NFKC differences. If

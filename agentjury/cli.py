@@ -9,7 +9,7 @@ Command-line interface.
                             [--producer-verdict correct|flawed] [--note TEXT] [--dir DIR]
     agentjury change candidates|prepare|send|status ...   (see agentjury/change_review.py)
 
-Verdicts are read from --dir, else $AGENTJURY_VERDICT_DIR, else .agentjury/verdicts.
+Verdicts are saved to and read from --dir, else $AGENTJURY_VERDICT_DIR, else .agentjury/verdicts.
 
 Exit codes: 0 verified, 1 needs_revision, 2 blocked, 3 insufficient_jury.
 `agentjury change` adds 6 for a refusal (nothing sent) and 7 for a stale review.
@@ -72,9 +72,9 @@ def read(path: str) -> str:
     return Path(path).read_text(encoding="utf-8")
 
 
-def save(verdict: Verdict) -> Path:
-    VERDICT_DIR.mkdir(parents=True, exist_ok=True)
-    out = VERDICT_DIR / verdict.filename
+def save(verdict: Verdict, directory: Path = VERDICT_DIR) -> Path:
+    directory.mkdir(parents=True, exist_ok=True)
+    out = directory / verdict.filename
     out.write_text(verdict.model_dump_json(indent=2), encoding="utf-8")
     return out
 
@@ -100,12 +100,13 @@ def print_verdict(verdict: Verdict) -> None:
     for r in verdict.reviews:
         arrow = {"approve": "▲", "revise": "▼", "abstain": "–"}[r.vote]
         meta = f"{r.latency_ms / 1000:.1f}s" if r.latency_ms is not None else ""
-        print(f"{arrow} {r.score:>2.0f}  {r.judge:<22} {r.reason}  [{meta}]")
+        # Judge names, reasons, findings and errors can carry model or endpoint text.
+        print(f"{arrow} {r.score:>2.0f}  {escape_controls(r.judge):<22} {escape_controls(r.reason)}  [{meta}]")
         for f in r.findings:
             checked = " [excerpts checked]" if f.evidence is not None else ""
-            print(f"        {SEVERITY_MARK[f.severity]} {f.text}{checked}")
+            print(f"        {SEVERITY_MARK[f.severity]} {escape_controls(f.text)}{checked}")
     for e in verdict.errors:
-        print(f"!  {e}")
+        print(f"!  {escape_controls(e)}")
 
 
 def cmd_review(args: argparse.Namespace) -> int:
@@ -132,7 +133,7 @@ def cmd_review(args: argparse.Namespace) -> int:
         print_verdict(verdict)
 
     if not args.no_save:
-        path = save(verdict)
+        path = save(verdict, verdict_dir(args))
         if not args.json:
             print(f"\nsaved {path}")
 
@@ -489,6 +490,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--producer-model", help="Model that did the work, e.g. claude-fable-5-1.")
     p.add_argument("--json", action="store_true", help="Print the full verdict as JSON.")
     p.add_argument("--no-save", action="store_true", help="Do not write the verdict to .agentjury/.")
+    p.add_argument("--dir", help="Verdict directory (default: $AGENTJURY_VERDICT_DIR or .agentjury/verdicts).")
     p.set_defaults(func=cmd_review)
 
     r = sub.add_parser("roles", help="List available judge roles.")

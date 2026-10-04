@@ -65,3 +65,16 @@ def test_cli_local_warning_is_safe(capsys):
     shown = capsys.readouterr().out
     assert "\x1b" not in shown
     assert "\\x1b" in shown
+
+
+def test_cli_escapes_model_written_text(capsys):
+    crafted = sample_verdict().model_dump(mode="json")
+    review = crafted["reviews"][0]
+    review["judge"] = "accuracy/test\x1b[31m"
+    review["reason"] = "Looks fine.\x1b[2J"
+    review["findings"][0]["text"] = "Price differs.\x1b]0;title\x07"
+    crafted["errors"] = ["critic/test: RuntimeError: boom\x1b[0m"]
+    print_verdict(Verdict.model_validate(crafted))
+    shown = capsys.readouterr().out
+    assert "\x1b" not in shown and "\x07" not in shown
+    assert "\\x1b[31m" in shown and "\\x1b[2J" in shown and "\\x1b]0;title\\x07" in shown and "boom\\x1b[0m" in shown

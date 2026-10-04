@@ -29,6 +29,10 @@ Unreleased on `main` after 0.5.0:
   Claude-initiated sends.
 - Added `agentjury --version`. No protocol schema, rubric or existing command
   behavior changed.
+- `agentjury review` now saves to `--dir` or `AGENTJURY_VERDICT_DIR` like the
+  other verdict commands, and the CLI and Hermes `/jury` displays escape control
+  characters in reviewer names, reasons, findings and errors, as the change-review
+  display already did.
 
 The 0.5.0 release included:
 

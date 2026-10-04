@@ -260,3 +260,17 @@ def test_legacy_frontmatter_key_is_replaced(plugin, tmp_path):
     jury.wait(10)
     text = note.read_text(encoding="utf-8")
     assert "agentjury_id:" not in text and text.count("agentjury_status") == 1 and "title: Old" in text
+
+
+def test_render_verdict_escapes_model_written_text(plugin):
+    from hermes_agentjury.jury import render_verdict
+
+    verdict = Panel([
+        FakeJudge("accuracy", provider="openai", reason="ok\x1b[2J", vote="revise", score=4,
+                  findings=[{"text": "Bad\x1b[31m", "severity": "minor"}]),
+        FakeJudge("critic", provider="anthropic", fail_times=5),
+    ]).review(__import__("agentjury").ReviewRequest(task="t", output="o"))
+    verdict.errors.append("critic/anthropic: RuntimeError: boom\x1b[0m")
+    shown = render_verdict(verdict, ["note.md"])
+    assert "\x1b" not in shown
+    assert "\\x1b[2J" in shown and "\\x1b[31m" in shown and "boom\\x1b[0m" in shown
