@@ -32,23 +32,29 @@ finding is *contested* when its reviewer disagreed with the outcome: the
 reviewer voted revise in a `verified` verdict, voted approve in a
 `needs_revision` or `blocked` verdict, raised the blocking finding that turned
 an approving majority into `needs_revision`, or voted in a split
-`insufficient_jury` panel. Verdicts are ordered by (any contested finding,
+`insufficient_jury` panel. An abstaining reviewer's findings are never
+contested, and a verdict the local guard downgraded counts as verified here,
+because the panel approved it. Verdicts are ordered by (any contested finding,
 highest pending severity, `created_at` newest first, `run_id`); within a
 verdict, findings keep saved order and saved numbers, so `N` is the position
 `adjudicate --finding N` indexes and the number `review`, `change status` and
-Hermes `/jury` print, with contested findings marked inline. **Verdicts
-without a producer grade** are listed separately, interleaved across four
+Hermes `/jury` print, with contested findings marked inline. **Verdicts without a producer grade or a reviewer grade** are listed
+separately, interleaved across four
 confidence bands from the highest down and newest first within each, so a
 bounded listing spreads grades of the output itself across the range the
 confidence index spans rather than concentrating them on contested panels.
-Each such verdict also names its reviews without an overall grade. `-n`
-(default 20) bounds each queue; the header prints the full backlog and says
-so. Every line carries the exact command with the verdict's own directory and
-a `--judge` value that resolves uniquely (the judge name, or the review ID when
-two reviews share a name). Placeholders are the bare words `LABEL`, `GRADE`
-and `VIEW`, which `adjudicate` rejects, so a pasted command records nothing
-until edited; no printed command contains a shell metacharacter. Unpublished
-adjudication events are flagged on the verdict's header. Exit 0.
+Each such verdict also names its reviews without an overall grade and stays
+listed for them after the producer grade is recorded, so the header's totals
+are the whole backlog. `-n` (default 20, never negative) bounds each queue; the
+header prints the full backlog and says so. Every line carries the exact
+command with the verdict's own directory and a `--judge` value that resolves
+uniquely (the judge name, or the review ID when two reviews share a name).
+Placeholders are the bare words `LABEL`, `GRADE` and `VIEW`, which
+`adjudicate` rejects, so a pasted command records nothing until edited.
+Directory and identifier values outside a safe character set are quoted for
+the shell (POSIX quoting, or PowerShell quoting on Windows), and a record whose
+identifiers contain control characters gets a note instead of a command.
+Unpublished adjudication events are flagged on the verdict's header. Exit 0.
 
 ### `export [--dir DIR]... [--out FILE]`
 
@@ -58,8 +64,9 @@ described in `docs/SECURITY.md`. Per verdict: `run_id`, `request_id`,
 `panel_id`, `schema_version`, `created_at`, `task_type`, `domain`,
 `producer.framework/provider/model`, `requested`, `responded`, `abstained`,
 `quorum`, `up`, `down`, `score`, `consensus`, `diversity`, `confidence`,
-`status`, `local_signal_rules`, `local_guard_applied`, `errors` as the failed
-reviewer's name and exception class only, `error_count`, `artifact_coverage`
+`status`, `local_signal_rules`, `local_guard_applied`, `errors` as the failed reviewer's name and exception class, read from the
+panel's `name: Class: message` layout and nulled for any other layout,
+`error_count`, `artifact_coverage`
 as counts per coverage kind, `pending_event_count`, `human_verdict`,
 `adjudicated_at`. Per review: `review_id`, `config_id`, `judge`, `role`,
 `provider`, `model`, `observed_model`, `vote`, `score`, `self_confidence`,
@@ -83,16 +90,20 @@ run is not among the verdicts read are counted as orphans. Identity strings
 off the expected shape are replaced by a stable 12-hex digest and counted. A
 structural audit then checks every string in the document against the
 allowlist of paths and shapes; any other string refuses the export with the
-path, exit 5. The summary names the counts and the distinct free-text labels
-that leave (judge, model, task type, domain, producer and route labels), so a
-tester reviews them before sharing. Without `--out`, the document goes to
+path, exit 5; a non-finite number refuses it too. The summary names the counts
+and the distinct free-text labels that leave (judge, model, requested model,
+role, task type, domain and producer labels), so a tester reviews them before
+sharing. Without `--out`, the document goes to
 standard output and the summary to standard error.
 
 ### `stats [--dir DIR]... | --from EXPORT [--json]`
 
 Descriptive counts from local verdicts or from an export (the two agree
-exactly), grouped by reviewer configuration (`config_id` with judge, role,
-provider, model, rubric version, prompt hash and allowlisted parameters) and,
+exactly, because the headline numbers are counted from the verdicts rather
+than copied from the export's `counts`), grouped by reviewer configuration
+(`config_id` with judge, role, provider, model, rubric version, prompt hash and
+the `timeout`, `effort`, `thinking` and `max_tokens` parameters; the text
+listing shows judge, model, rubric, prompt, config and those parameters) and,
 within it, by task type (`(none)` when unset): findings total and graded by
 label; reviews, abstentions and review grades; and, on verdicts with a
 producer grade, votes counted with `benchmark-audit`'s terms
@@ -102,8 +113,10 @@ Verdict-level counts use the benchmark's vocabulary: `unsafe_approvals`,
 output and the JSON (`descriptive_only: true`) state that these are counts of
 human grades, not reputation weights or calibrated probabilities, and nothing
 in the package reads them to change a verdict; a test asserts the aggregator
-and panel code never reference grades. Exit 5 on an unreadable or foreign
-`--from` file; `--dir` and `--from` are exclusive.
+and panel code never reference grades. Exit 5 on an unreadable, foreign or
+malformed `--from` document (`-` reads standard input); every label it prints
+is escaped, because a received file is untrusted. `--dir` and `--from` are
+exclusive.
 
 ## Code benchmark pack
 
@@ -177,6 +190,6 @@ small for a long time and restart whenever a rubric, prompt, parameter or
 model changes. Without adjudicator identity, grader disagreement cannot be
 measured from an export. Free-text labels and self-hosted model identifiers
 leave with an export and are disclosed, not scrubbed. The code pack is tiny and
-synthetic; the guard's cue list is singular and line-bound. For a large store
+synthetic; the guard's cue list is short and singular. For a large store
 the producer queue is a backlog that `-n` bounds and the bands spread; it does
 not drain.

@@ -23,6 +23,24 @@ def sample_verdict() -> Verdict:
     return aggregate(request, [review], requested=1, requested_providers=1)
 
 
+def test_insufficient_jury_line_counts_voters_and_providers():
+    from agentjury.display import verdict_lines
+    request = ReviewRequest(task="t", output="o")
+    reviews = [
+        Review(judge="accuracy/openai", role="accuracy", provider="openai", model="m", vote=Vote.APPROVE,
+               score=8, reason="Fine.", rubric_version="0.7", prompt_hash="h"),
+        Review(judge="critic/anthropic", role="critic", provider="anthropic", model="m", vote=Vote.REVISE,
+               score=4, reason="Not fine.", rubric_version="0.7", prompt_hash="h"),
+        Review(judge="executive/openai", role="executive", provider="openai", model="m", vote=Vote.ABSTAIN,
+               score=5, reason="Cannot tell.", rubric_version="0.7", prompt_hash="h"),
+    ]
+    verdict = aggregate(request, reviews, requested=4, requested_providers=2)
+    assert verdict.status == "insufficient_jury" and verdict.abstained == 1
+    lines = verdict_lines(verdict)
+    assert lines[2] == "Insufficient jury: 2 of 4 judges voted (quorum 3), from 2 provider(s). No verdict."
+    assert verdict_lines(verdict, numbered=True)[2] == lines[2]
+
+
 def test_display_marks_checked_excerpts(capsys):
     print_verdict(sample_verdict())
     shown = capsys.readouterr().out

@@ -86,8 +86,8 @@ its JSON (`descriptive_only: true`) say these are counts, not reputation
 weights or calibrated probabilities; the aggregator never reads them. Grades
 are self-reported by whoever ran `adjudicate`. `adjudication pending` puts
 findings whose reviewer disagreed with the outcome first, because grading a
-dissent says most about a reviewer, and lists verdicts without a producer
-grade across confidence bands, because calibration needs grades at every
+dissent says most about a reviewer, and lists verdicts without a producer or
+reviewer grade across confidence bands, because calibration needs grades at every
 confidence level, not only on contested panels.
 
 ## Source audit and next empirical work

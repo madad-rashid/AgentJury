@@ -378,9 +378,9 @@ Set `AGENTJURY_VERDICT_DIR` to avoid repeating `--dir`.
 ### What to grade, and sharing grades
 
 `agentjury adjudication pending` lists what still needs a grade, most
-informative first: findings whose reviewer disagreed with the panel's outcome,
-then verdicts without a producer grade, spread across confidence bands so the
-confidence index can be calibrated one day. Every line carries the
+informative first: findings whose reviewer disagreed with the panel's outcome, then verdicts
+without a producer grade or a reviewer grade, spread across confidence bands so
+the confidence index can be calibrated one day. Every line carries the
 `agentjury adjudicate` command to run; its `LABEL`, `GRADE` and `VIEW`
 placeholders record nothing until you replace them. `--contested`,
 `--task-type` and `--status` narrow the listing, and `--dir` is repeatable, so

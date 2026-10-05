@@ -272,3 +272,17 @@ def test_render_verdict_escapes_model_written_text(plugin):
     shown = render_verdict(verdict, ["note.md"])
     assert "\x1b" not in shown
     assert "\\x1b[2J" in shown and "\\x1b[31m" in shown and "boom\\x1b[0m" in shown
+
+
+def test_hermes_imports_only_symbols_published_in_0_5_0():
+    import ast
+    allowed = {"Artifact", "ArtifactCoverage", "Panel", "Producer", "ReviewRequest", "Verdict", "panel_config",
+               "load_roles", "escape_controls", "agentjury"}
+    for name in ("jury.py", "__init__.py"):
+        tree = ast.parse((ROOT / name).read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("agentjury"):
+                assert node.module.split(".")[1:2] in ([], ["judges"], ["reviewer_guard"], ["panel_config"]), node.module
+                assert {alias.name for alias in node.names} <= allowed, (name, node.module)
+            if isinstance(node, ast.Import):
+                assert {alias.name for alias in node.names if alias.name.startswith("agentjury")} <= allowed

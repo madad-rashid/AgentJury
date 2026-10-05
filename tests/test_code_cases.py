@@ -101,6 +101,37 @@ def test_benchmark_runs_the_code_pack_offline(tmp_path, monkeypatch, capsys):
     assert "return a - b" not in json.dumps(report)
 
 
+def test_resume_remembers_the_code_pack(tmp_path, monkeypatch, capsys):
+    monkeypatch.chdir(tmp_path)
+    judges = [ApprovingJudge("correctness", "a"), ApprovingJudge("security", "b")]
+    monkeypatch.setattr("agentjury.benchmark.build_panel", lambda spec: Panel(judges))
+    spec = "correctness:openrouter:x/one:free,security:openrouter:y/two:free"
+    assert main(["benchmark", "--pack", "code", "--panel", spec, "--max-calls", "1"]) == 4
+    capsys.readouterr()
+    report_path = next((tmp_path / ".agentjury" / "benchmarks").glob("*.json"))
+    assert json.loads(report_path.read_text(encoding="utf-8"))["source"] == "pack:code"
+    assert main(["benchmark", "--panel", spec, "--resume", str(report_path), "--pack", "starter"]) == 5
+    capsys.readouterr()
+    assert main(["benchmark", "--panel", spec, "--resume", str(report_path), "--max-calls", "50", "--json"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["state"] == "complete" and report["source"] == "pack:code" and len(report["outcomes"][spec]) == 11
+
+
+def test_roles_file_errors_exit_with_a_message(tmp_path, capsys):
+    from agentjury.judges import parse_roles
+    with pytest.raises(ValueError, match="valid JSON"):
+        parse_roles("{")
+    for text in ("[1]", '{"a": 1}'):
+        with pytest.raises(ValueError, match="JSON object"):
+            parse_roles(text)
+    broken = tmp_path / "roles.json"
+    broken.write_text("{", encoding="utf-8")
+    for command in (["roles", "--roles", str(broken)], ["roles", "--roles", str(tmp_path / "missing.json")]):
+        with pytest.raises(SystemExit) as stopped:
+            main(command)
+        assert isinstance(stopped.value.code, str) and "Traceback" not in capsys.readouterr().err
+
+
 def test_pack_and_cases_are_mutually_exclusive(tmp_path, capsys):
     cases = tmp_path / "cases.json"
     cases.write_text('{"schema_version": "1", "cases": []}', encoding="utf-8")

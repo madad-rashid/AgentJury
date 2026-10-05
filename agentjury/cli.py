@@ -84,9 +84,16 @@ def print_verdict(verdict: Verdict) -> None:
     print("\n".join(verdict_lines(verdict)))
 
 
+def _load_roles_or_exit(path: str) -> None:
+    try:
+        load_roles(path)
+    except (OSError, ValueError) as exc:
+        sys.exit(str(exc))
+
+
 def cmd_review(args: argparse.Namespace) -> int:
     if args.roles:
-        load_roles(args.roles)
+        _load_roles_or_exit(args.roles)
     request = ReviewRequest(
         task=read(args.task),
         output=read(args.output),
@@ -296,7 +303,7 @@ def _adjudicate_locked(args: argparse.Namespace, path: Path) -> int:
 
 def cmd_roles(args: argparse.Namespace) -> int:
     if args.roles:
-        load_roles(args.roles)
+        _load_roles_or_exit(args.roles)
     for name, desc in ROLES.items():
         print(f"{name:<12} {desc}")
     return 0
