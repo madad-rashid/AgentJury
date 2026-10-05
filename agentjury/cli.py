@@ -40,15 +40,16 @@ from . import panel_config
 from . import benchmark
 from . import change_review
 from .benchmark_audit import audit_report
+from . import benchmark_cases
 from .benchmark_cases import load_cases
 from .benchmark_score import score
+from .display import verdict_lines
+from .local_store import DEFAULT_VERDICT_DIR, atomic_write as _atomic_write
 from .panel import Panel
 from .protocol import HumanReview, Producer, ReviewRequest, Verdict
 
 DEFAULT_PANEL = "accuracy:openai,critic:anthropic,executive:openai"
-VERDICT_DIR = Path(".agentjury") / "verdicts"
-
-SEVERITY_MARK = {"minor": "-", "major": "!", "blocking": "X"}
+VERDICT_DIR = DEFAULT_VERDICT_DIR
 
 
 # Exit codes, so shell scripts and CI can branch without parsing output.
@@ -80,33 +81,7 @@ def save(verdict: Verdict, directory: Path = VERDICT_DIR) -> Path:
 
 
 def print_verdict(verdict: Verdict) -> None:
-    from .reviewer_guard import escape_controls
-
-    print(verdict.render())
-    print(f"jury confidence index {verdict.confidence:.0%}  (heuristic, not a probability)")
-    if verdict.status == "insufficient_jury":
-        voters = verdict.responded - verdict.abstained
-        providers = len({r.provider for r in verdict.reviews if r.vote != "abstain"})
-        print(f"Insufficient jury: {voters} of {verdict.requested} judges voted (quorum {verdict.quorum}), "
-              f"from {providers} provider(s). No verdict.")
-    if verdict.local_signals:
-        if verdict.local_guard_applied:
-            print("Local check changed verified to needs_revision: reviewer-directed instruction detected.")
-        else:
-            print("Local check detected a reviewer-directed instruction; status unchanged.")
-        for signal in verdict.local_signals:
-            print(f"  ! {signal.rule_id}: {escape_controls(signal.excerpt)}")
-    print()
-    for r in verdict.reviews:
-        arrow = {"approve": "▲", "revise": "▼", "abstain": "–"}[r.vote]
-        meta = f"{r.latency_ms / 1000:.1f}s" if r.latency_ms is not None else ""
-        # Judge names, reasons, findings and errors can carry model or endpoint text.
-        print(f"{arrow} {r.score:>2.0f}  {escape_controls(r.judge):<22} {escape_controls(r.reason)}  [{meta}]")
-        for f in r.findings:
-            checked = " [excerpts checked]" if f.evidence is not None else ""
-            print(f"        {SEVERITY_MARK[f.severity]} {escape_controls(f.text)}{checked}")
-    for e in verdict.errors:
-        print(f"!  {escape_controls(e)}")
+    print("\n".join(verdict_lines(verdict)))
 
 
 def cmd_review(args: argparse.Namespace) -> int:
@@ -141,7 +116,8 @@ def cmd_review(args: argparse.Namespace) -> int:
 
 
 def verdict_dir(args: argparse.Namespace) -> Path:
-    return Path(getattr(args, "dir", None) or os.environ.get("AGENTJURY_VERDICT_DIR") or VERDICT_DIR)
+    from .local_store import verdict_dir as resolve
+    return resolve(getattr(args, "dir", None))
 
 
 def load_verdict(args: argparse.Namespace) -> tuple[Path, Verdict]:
@@ -200,18 +176,6 @@ def log_event(directory: Path, event: dict) -> None:
     if text and not text.endswith("\n"):
         text += "\n"
     _atomic_write(path, text + json.dumps(event, default=str) + "\n")
-
-
-def _atomic_write(path: Path, text: str) -> None:
-    temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
-    try:
-        with temporary.open("w", encoding="utf-8") as stream:
-            stream.write(text)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary, path)
-    finally:
-        temporary.unlink(missing_ok=True)
 
 
 @contextmanager
@@ -350,7 +314,7 @@ def cmd_benchmark(args: argparse.Namespace) -> int:
         print("Benchmark configuration error: --retry-errors requires --resume.", file=sys.stderr)
         return 5
     try:
-        cases, pack_hash = load_cases(args.cases)
+        cases, pack_hash = load_cases(args.cases, pack=args.pack)
         try:
             candidates = benchmark.prepare(cases, args.panel)
         except (ValueError, ImportError) as exc:
@@ -518,7 +482,10 @@ def main(argv: list[str] | None = None) -> int:
     s.set_defaults(func=cmd_schema)
 
     b = sub.add_parser("benchmark", help="Compare explicit panels on labeled cases.")
-    b.add_argument("--cases", type=Path, help="UTF-8 JSON case file (default: built-in starter cases).")
+    source = b.add_mutually_exclusive_group()
+    source.add_argument("--cases", type=Path, help="UTF-8 JSON case file (default: built-in starter cases).")
+    source.add_argument("--pack", choices=sorted(benchmark_cases.PACKS), default="starter",
+                        help="Built-in case pack: starter (short answers) or code (unified diffs).")
     b.add_argument("--panel", action="append", required=True,
                    help="Candidate panel in the same syntax as review; repeat to compare.")
     b.add_argument("--max-calls", type=int, default=20,

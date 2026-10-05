@@ -13,7 +13,6 @@ Nothing here touches AgentJury's core. It only builds requests and consumes verd
 
 from __future__ import annotations
 
-import json
 import hashlib
 import logging
 import os

@@ -213,7 +213,6 @@ def test_missing_response_is_skipped_not_crashed(plugin, tmp_path):
 
 def test_slow_older_turn_does_not_overwrite_newer_verdict(plugin, tmp_path):
     """Turn 1 is slow and votes revise; turn 2 is fast and approves. Latest must be turn 2."""
-    calls = {"n": 0}
 
     def factory(settings):
         return Panel([FakeJudge("accuracy", provider="openai"), FakeJudge("critic", provider="anthropic")])
@@ -225,7 +224,6 @@ def test_slow_older_turn_does_not_overwrite_newer_verdict(plugin, tmp_path):
                   FakeJudge("critic", provider="anthropic", vote="revise", score=4, delay=0.6)])
     fast = Panel([FakeJudge("accuracy", provider="openai"), FakeJudge("critic", provider="anthropic")])
     panels = iter([slow, fast])
-    original = jury._panel_factory
     jury._panel = None
 
     class Switching:

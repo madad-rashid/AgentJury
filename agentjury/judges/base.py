@@ -72,14 +72,34 @@ def register_roles(roles: dict[str, str]) -> None:
         ROLES[name] = description
 
 
+def parse_roles(text: str) -> dict[str, str]:
+    """Validate a JSON document of {"role_name": "description"} without registering it."""
+    try:
+        roles = json.loads(text)
+    except ValueError:
+        raise ValueError("Roles file must be valid JSON.") from None
+    if not isinstance(roles, dict) or not all(isinstance(v, str) for v in roles.values()):
+        raise ValueError("Roles file must be a JSON object mapping role names to descriptions.")
+    return roles
+
+
 def load_roles(path: str) -> dict[str, str]:
     """Load roles from a JSON file of {"role_name": "description"} and register them."""
     import pathlib
-    roles = json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
-    if not isinstance(roles, dict) or not all(isinstance(v, str) for v in roles.values()):
-        raise ValueError("Roles file must be a JSON object mapping role names to descriptions.")
+    roles = parse_roles(pathlib.Path(path).read_text(encoding="utf-8"))
     register_roles(roles)
     return roles
+
+
+def _packaged_roles(name: str) -> dict[str, str]:
+    from importlib import resources
+    return parse_roles(resources.files("agentjury").joinpath(f"data/{name}").read_text(encoding="utf-8"))
+
+
+# Code-change review roles ship with the package so the CLI, benchmark and
+# integrations share one definition. Built-in roles above keep their IDs.
+CODE_ROLES: dict[str, str] = _packaged_roles("change_roles.json")
+register_roles(CODE_ROLES)
 
 
 class OpinionFinding(BaseModel):

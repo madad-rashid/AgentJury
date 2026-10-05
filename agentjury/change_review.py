@@ -22,11 +22,9 @@ import re
 import shutil
 import sys
 from datetime import datetime, timezone
-from importlib import resources
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
-from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict
 
@@ -38,9 +36,11 @@ from .change_snapshot import (
     is_ignored, matches_commit, read_worktree, repo_relative, repo_root, resolve_commit, secret_named,
     select, sha256,
 )
-from .judges import ROLES, register_roles
+from .display import verdict_lines as _render_verdict
+from .judges import CODE_ROLES, ROLES, parse_roles, register_roles
 from .judges.base import build_system_prompt, build_user_prompt
 from .judges.evidence import _normalize
+from .local_store import atomic_write as _atomic_write, verdict_dir as _resolve_verdict_dir
 from .panel import Panel
 from .protocol import ArtifactCoverage, Producer, ReviewRequest, Verdict
 from .reviewer_guard import escape_controls
@@ -57,8 +57,7 @@ CHANGES_DIR = Path(STATE_DIR) / "changes"
 
 def code_roles() -> dict[str, str]:
     """The packaged code-review roles: correctness, security and tests."""
-    raw = resources.files("agentjury").joinpath("data/change_roles.json").read_text(encoding="utf-8")
-    return json.loads(raw)
+    return dict(CODE_ROLES)
 
 
 # ---------------------------------------------------------------------------
@@ -137,19 +136,6 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _atomic_write(path: Path, text: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
-    try:
-        with temporary.open("w", encoding="utf-8", newline="\n") as stream:
-            stream.write(text)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary, path)
-    finally:
-        temporary.unlink(missing_ok=True)
-
-
 def _changes(root: Path) -> Path:
     return root / CHANGES_DIR
 
@@ -199,8 +185,7 @@ def load_pending(root: Path) -> list[tuple[ChangeBundle, bool]]:
 
 
 def _verdict_dir(args: argparse.Namespace, root: Path) -> Path:
-    return Path(getattr(args, "dir", None) or os.environ.get("AGENTJURY_VERDICT_DIR")
-                or root / STATE_DIR / "verdicts")
+    return _resolve_verdict_dir(getattr(args, "dir", None), root / STATE_DIR / "verdicts")
 
 
 # ---------------------------------------------------------------------------
@@ -374,12 +359,11 @@ def build_context(snapshot: ChangeSnapshot, log: SuppliedLog | None, log_text: s
 
 def _roles_file(path: str) -> dict[str, str]:
     try:
-        roles = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        raise ChangeError(f"Cannot read roles file {path!r} as JSON.") from None
-    if not isinstance(roles, dict) or not all(isinstance(v, str) for v in roles.values()):
-        raise ChangeError("Roles file must be a JSON object mapping role names to descriptions.")
-    return roles
+        return parse_roles(Path(path).read_text(encoding="utf-8"))
+    except OSError:
+        raise ChangeError(f"Cannot read roles file {path!r}.") from None
+    except ValueError as exc:
+        raise ChangeError(str(exc)) from None
 
 
 def _check_limits(args: argparse.Namespace) -> None:
@@ -522,40 +506,11 @@ def _file_hints(bundle: ChangeBundle) -> list[tuple[str, str]]:
 
 def verdict_lines(verdict: Verdict, bundle: ChangeBundle) -> list[str]:
     """The verdict with findings numbered as `agentjury adjudicate` expects. Model text is escaped."""
-    lines = [verdict.render(), f"jury confidence index {verdict.confidence:.0%}  (heuristic, not a probability)"]
-    if verdict.status == "insufficient_jury":
-        voters = verdict.responded - verdict.abstained
-        providers = len({r.provider for r in verdict.reviews if r.vote != "abstain"})
-        lines.append(f"Insufficient jury: {voters} of {verdict.requested} judges voted (quorum {verdict.quorum}), "
-                     f"from {providers} provider(s). No verdict.")
     reviewed, omitted = bundle.snapshot.reviewed, bundle.snapshot.omitted
     note = f"Coverage: {_files(len(reviewed))} reviewed"
     if omitted:
         note += f"; {len(omitted)} not sent: " + ", ".join(f"{_esc(f.path)} ({f.reason})" for f in omitted)
-    lines.append(note)
-    if verdict.local_signals:
-        lines.append("Local check changed verified to needs_revision: reviewer-directed instruction detected."
-                     if verdict.local_guard_applied
-                     else "Local check detected a reviewer-directed instruction; status unchanged.")
-        lines += [f"  ! {signal.rule_id}: {_esc(signal.excerpt)}" for signal in verdict.local_signals]
-    lines.append("")
-    hints = _file_hints(bundle)
-    for review in verdict.reviews:
-        arrow = {"approve": "▲", "revise": "▼", "abstain": "–"}[review.vote]
-        meta = f"{review.latency_ms / 1000:.1f}s" if review.latency_ms is not None else ""
-        lines.append(f"{arrow} {review.score:>2.0f}  {_esc(review.judge):<22} {_esc(review.reason)}  [{meta}]")
-        for number, finding in enumerate(review.findings, 1):
-            where = ""
-            evidence = finding.evidence
-            if evidence is not None and evidence.output_artifact_id is None:
-                quote = _normalize(evidence.output_quote)
-                files = [path for path, text in hints if quote and quote in text]
-                where = f"  ({_esc(files[0])})" if len(files) == 1 else ("  (several files)" if files else "")
-            checked = " [excerpts checked]" if evidence is not None else ""
-            graded = f" [graded {finding.adjudication}]" if finding.adjudication else ""
-            lines.append(f"        {number}. [{finding.severity}] {_esc(finding.text)}{where}{checked}{graded}")
-    lines += [f"!  {_esc(error)}" for error in verdict.errors]
-    return lines
+    return _render_verdict(verdict, numbered=True, coverage=note, file_hints=_file_hints(bundle))
 
 
 def _follow_up(review: ChangeReview, cwd: Path) -> list[str]:
