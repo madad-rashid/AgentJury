@@ -29,6 +29,18 @@ Unreleased on `main` after 0.5.0:
   Claude-initiated sends.
 - Added `agentjury --version`. No protocol schema, rubric or existing command
   behavior changed.
+- Added `agentjury adjudication pending|export|stats`: a grading queue that
+  puts reviewer dissent first and spreads producer grades across confidence
+  bands, a text-free JSON export of grades and reviewer identities with an
+  allowlist pinned by tests, and descriptive counts per reviewer configuration
+  and task type that are labelled as not being reputation weights.
+- Added `agentjury benchmark --pack code`: eleven labelled unified-diff cases,
+  two injected ones caught by the local check and one not. The report records
+  its case source so `--resume` needs no repeated `--pack`.
+- The `correctness`, `security` and `tests` roles are built in and listed by
+  `agentjury roles`; existing roles and configuration IDs are unchanged.
+- Verdict display, atomic writes and verdict-directory resolution are shared
+  between `review` and `change`; `review` saves atomically and shows grades.
 - `agentjury review` now saves to `--dir` or `AGENTJURY_VERDICT_DIR` like the
   other verdict commands, and the CLI and Hermes `/jury` displays escape control
   characters in reviewer names, reasons, findings and errors, as the change-review

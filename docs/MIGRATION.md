@@ -123,3 +123,14 @@ refusal and `status` exits 7 for a stale review. `agentjury --version` prints th
 package and schema versions. The packaged `correctness`, `security` and `tests`
 roles are new reviewer configurations; do not merge their history with other
 roles.
+
+Also on `main`: `agentjury adjudication pending|export|stats` (what to grade,
+a text-free grade export, descriptive counts; `export` and `stats` exit 5 on
+invalid input), `agentjury benchmark --pack code` with a report that remembers
+its pack on `--resume`, and the three code roles as built-ins, so
+`agentjury roles` lists eight. A custom roles file that redefines
+`correctness`, `security` or `tests` overrides the built-in text and gives that
+role a new configuration ID, as it always did for built-in roles. Core now
+writes verdict files atomically with LF line endings on every platform; a
+verdict directory committed from Windows may show a one-time line-ending change.
+The `review` display now shows `[graded <label>]` after graded findings.

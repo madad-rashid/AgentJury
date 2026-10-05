@@ -123,6 +123,8 @@ def content_digest(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+# Hermes keeps its own copy: the plugin folder is installed against the published
+# 0.5.0 core, which has no agentjury.local_store. tests/test_hermes_plugin.py pins the imports.
 def atomic_write(path: Path, text: str) -> None:
     temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
     try:
@@ -189,6 +191,7 @@ def invalidate_annotation(path: Path) -> None:
         atomic_write(path, clean)
 
 
+# Separate from agentjury.display for the same 0.5.0 compatibility reason.
 def render_verdict(verdict: Verdict, files: list[str] | None = None) -> str:
     lines = [f"{verdict.render()}   run {verdict.run_id}",
              f"jury confidence index {verdict.confidence:.0%}"]

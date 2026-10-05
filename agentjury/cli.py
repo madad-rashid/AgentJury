@@ -45,7 +45,7 @@ from . import benchmark_cases
 from .benchmark_cases import load_cases
 from .benchmark_score import score
 from .display import verdict_lines
-from .local_store import DEFAULT_VERDICT_DIR, atomic_write as _atomic_write
+from .local_store import DEFAULT_VERDICT_DIR, atomic_write as _atomic_write, verdict_dir as _resolve_verdict_dir
 from .panel import Panel
 from .protocol import HumanReview, Producer, ReviewRequest, Verdict
 
@@ -75,9 +75,8 @@ def read(path: str) -> str:
 
 
 def save(verdict: Verdict, directory: Path = VERDICT_DIR) -> Path:
-    directory.mkdir(parents=True, exist_ok=True)
     out = directory / verdict.filename
-    out.write_text(verdict.model_dump_json(indent=2), encoding="utf-8")
+    _atomic_write(out, verdict.model_dump_json(indent=2))
     return out
 
 
@@ -117,8 +116,7 @@ def cmd_review(args: argparse.Namespace) -> int:
 
 
 def verdict_dir(args: argparse.Namespace) -> Path:
-    from .local_store import verdict_dir as resolve
-    return resolve(getattr(args, "dir", None))
+    return _resolve_verdict_dir(getattr(args, "dir", None))
 
 
 def load_verdict(args: argparse.Namespace) -> tuple[Path, Verdict]:

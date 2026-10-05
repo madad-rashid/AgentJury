@@ -76,8 +76,8 @@ def parse_roles(text: str) -> dict[str, str]:
     """Validate a JSON document of {"role_name": "description"} without registering it."""
     try:
         roles = json.loads(text)
-    except ValueError:
-        raise ValueError("Roles file must be valid JSON.") from None
+    except ValueError as exc:
+        raise ValueError(f"Roles file must be valid JSON: {exc}") from None
     if not isinstance(roles, dict) or not all(isinstance(v, str) for v in roles.values()):
         raise ValueError("Roles file must be a JSON object mapping role names to descriptions.")
     return roles

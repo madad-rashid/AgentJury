@@ -253,6 +253,13 @@ argument for you to choose; normal reviews never switch panels automatically.
 The six starter cases are a smoke test. A passing recommendation is not evidence
 of general accuracy, calibrated confidence or robust prompt-injection resistance.
 
+`--pack code` runs eleven unified-diff cases instead: correct, flawed and
+injected changes to small Python functions, meant for `correctness` and
+`security` panels (the `tests` role rejects untested correct diffs by design).
+The local check catches two of the injected cases and misses one, so the pack
+measures the models as well as the guard. It is synthetic and tiny; a good
+score is not evidence of accuracy on real changes.
+
 Your case text goes to the model services you select. Reports stay local and
 ignored by Git; they include model-generated review reasons and findings but
 omit the original case text, checked excerpts, and configured keys. A model
@@ -368,6 +375,33 @@ not a single atomic transaction. Do not edit or delete pending events manually.
 
 Set `AGENTJURY_VERDICT_DIR` to avoid repeating `--dir`.
 
+### What to grade, and sharing grades
+
+`agentjury adjudication pending` lists what still needs a grade, most
+informative first: findings whose reviewer disagreed with the panel's outcome,
+then verdicts without a producer grade, spread across confidence bands so the
+confidence index can be calibrated one day. Every line carries the
+`agentjury adjudicate` command to run; its `LABEL`, `GRADE` and `VIEW`
+placeholders record nothing until you replace them. `--contested`,
+`--task-type` and `--status` narrow the listing, and `--dir` is repeatable, so
+Hermes and repository directories can be read together.
+
+```bash
+agentjury adjudication pending --contested
+agentjury adjudication export --out grades.json
+agentjury adjudication stats
+```
+
+`export` writes grades, reviewer identities, votes, scores, confidence and
+timestamps as JSON with no reviewed text, excerpts, reasons, notes, error
+messages, adjudicator names or file paths, and prints the operator-chosen
+labels it does carry (task types, model and judge names) so you can check
+them before sharing. `stats` prints descriptive counts per reviewer
+configuration and task type: graded findings by label, review grades, and
+votes against producer grades. They are counts of human grades, not
+reputation weights; nothing reads them to change a verdict. See
+[security](docs/SECURITY.md#adjudication-exports).
+
 Identity hierarchy:
 
 - `request_id`: the work being evaluated
@@ -473,6 +507,7 @@ not prove interpretation. See [security limits](docs/SECURITY.md).
 - [x] PyPI release
 - [x] OpenRouter, Ollama, and configurable OpenAI-compatible judge routes
 - [x] Claude Code integration: previewed, user-sent code-change reviews (on `main`, unreleased)
+- [x] Grading queue, text-free grade export and descriptive counts; code benchmark pack (on `main`, unreleased)
 - [ ] Reviewer reputation by task type, weighted by human agreement over time
 - [ ] Jury diversity weighting from historical disagreement
 - [ ] Calibrated confidence from observed outcomes

@@ -137,3 +137,7 @@ for sessions that mix unrelated tasks.
 
 Type `/jury` in any session to see the latest verdict, or `/jury <request_id>`
 for a saved one. Verdict JSON accumulates in `<HERMES_HOME>/plugin-data/agentjury/verdicts/`.
+From a checkout of `main` (the published 0.5.0 core lacks the command),
+`agentjury adjudication pending --dir <HERMES_HOME>/plugin-data/agentjury/verdicts`
+lists what still needs grading there, and `export` shares the grades without
+the reviewed text.

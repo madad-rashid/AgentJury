@@ -180,7 +180,7 @@ def test_invalid_later_finding_leaves_verdict_and_log_unchanged(saved, second):
 def test_verdict_replace_failure_does_not_publish_audit(saved, monkeypatch):
     d, v = saved
     before = (d / v.filename).read_bytes()
-    monkeypatch.setattr(cli.os, "replace", lambda *a: (_ for _ in ()).throw(OSError("disk failure")))
+    monkeypatch.setattr("os.replace", lambda *a: (_ for _ in ()).throw(OSError("disk failure")))  # shared by local_store
     with pytest.raises(SystemExit, match="persist"):
         main(["adjudicate", v.run_id, "--dir", str(d), "--producer-verdict", "correct"])
     assert (d / v.filename).read_bytes() == before

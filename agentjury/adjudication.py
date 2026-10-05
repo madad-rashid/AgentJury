@@ -14,6 +14,7 @@ counts are descriptive, not reputation, and the aggregator never reads them.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -33,8 +34,10 @@ EXPORT_KIND = "agentjury.adjudication.export"
 EXPORT_VERSION = 1
 EXIT_INVALID = 5
 SEVERITY_RANK = {"blocking": 0, "major": 1, "minor": 2}
-FINDING_LABELS = "correct|partially_correct|wrong"
-REVIEW_LABELS = "agree|partial|disagree"
+# Placeholders in printed commands are bare words that adjudicate rejects, never
+# shell metacharacters: a command pasted unedited must record nothing.
+LEGEND = "Replace LABEL with correct, partially_correct or wrong; GRADE with correct or flawed; VIEW with agree, partial or disagree."
+CONFIDENCE_BANDS = ((0.75, "75-100%"), (0.5, "50-75%"), (0.25, "25-50%"), (0.0, "0-25%"))
 
 # Reviewer parameters that may leave in an export, with the shape each value must have.
 _SLUG = re.compile(r"^[a-z0-9][a-z0-9_.-]{0,31}$")
@@ -48,7 +51,7 @@ PARAM_SHAPES: dict[str, Any] = {
 _NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:/+@-]{0,199}$")
 _IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
 _ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
-_VERSION = re.compile(r"^\d+(\.\d+)*([a-z]+\d*)?$")
+_VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.+-]{0,31}$")  # semver and PEP 440 shapes
 _TIMESTAMP = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$")
 EVENT_KINDS = {"finding", "review", "producer"}
 GRADES = {"correct", "partially_correct", "wrong", "agree", "partial", "disagree", "flawed"}
@@ -106,6 +109,8 @@ class Loaded:
     verdicts: list[tuple[Path, Verdict]] = field(default_factory=list)
     events: list[dict[str, Any]] = field(default_factory=list)
     directories: list[Path] = field(default_factory=list)
+    missing: list[str] = field(default_factory=list)
+    problems: list[str] = field(default_factory=list)
     unreadable: int = 0
     duplicates: int = 0
     orphan_events: int = 0
@@ -126,12 +131,14 @@ def load(directories: list[Path]) -> Loaded:
     seen_events: set[str] = set()
     for directory in directories:
         if not directory.is_dir():
+            loaded.missing.append(str(directory))
             continue
         for path in sorted(directory.glob("*.json")):
             try:
                 verdict = Verdict.model_validate_json(path.read_text(encoding="utf-8"))
-            except (OSError, ValueError):
+            except (OSError, ValueError) as exc:
                 loaded.unreadable += 1
+                loaded.problems.append(f"{path}: not a readable verdict ({type(exc).__name__})")
                 continue
             key = (verdict.request_id, verdict.run_id)
             if key in by_run:
@@ -147,19 +154,23 @@ def load(directories: list[Path]) -> Loaded:
             continue
         try:
             lines = log_path.read_text(encoding="utf-8").splitlines()
-        except OSError:
+        except OSError as exc:
             loaded.unreadable += 1
+            loaded.problems.append(f"{log_path}: unreadable ({type(exc).__name__})")
             continue
-        for line in lines:
+        for number, line in enumerate(lines, 1):
             if not line.strip():
                 continue
             try:
                 event = json.loads(line)
             except ValueError:
                 loaded.unreadable += 1
+                loaded.problems.append(f"{log_path}:{number}: not JSON; adjudicate cannot publish history "
+                                       "in this directory until the line is repaired")
                 continue
             if not isinstance(event, dict) or not isinstance(event.get("event_id"), str):
                 loaded.unreadable += 1
+                loaded.problems.append(f"{log_path}:{number}: not an adjudication event")
                 continue
             if event["event_id"] in seen_events:
                 loaded.duplicates += 1
@@ -180,6 +191,14 @@ def _skipped(loaded: Loaded) -> str | None:
         return None
     return (f"Skipped {loaded.unreadable} unreadable and {loaded.duplicates} duplicate records; "
             f"{loaded.orphan_events} events refer to verdicts not read.")
+
+
+def _report_problems(loaded: Loaded) -> None:
+    """Name what was skipped on standard error, so the user can find and repair it."""
+    for directory in loaded.missing:
+        print(f"Not a directory: {directory}", file=sys.stderr)
+    for problem in loaded.problems:
+        print(f"Skipped {problem}", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
@@ -223,11 +242,35 @@ def _header(path: Path, verdict: Verdict) -> dict[str, Any]:
             "pending_events": len(verdict.pending_adjudication_events)}
 
 
-def pending(loaded: Loaded) -> dict[str, Any]:
-    """Two queues: findings to grade (most informative first) and verdicts without a producer grade (newest first)."""
+def _band(confidence: float) -> str:
+    return next(label for floor, label in CONFIDENCE_BANDS if confidence >= floor)
+
+
+def _stratified(groups: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Newest first within each confidence band, bands interleaved from the highest down, so a
+    bounded listing spreads producer grades across the confidence range calibration needs."""
+    bands: dict[str, list[dict[str, Any]]] = {label: [] for _, label in CONFIDENCE_BANDS}
+    for group in sorted(groups, key=lambda g: (-g["created_at"].timestamp(), g["run_id"])):
+        bands[_band(group["confidence"])].append(group)
+    ordered: list[dict[str, Any]] = []
+    while any(bands.values()):
+        for _, label in CONFIDENCE_BANDS:
+            if bands[label]:
+                ordered.append(bands[label].pop(0))
+    return ordered
+
+
+def pending(loaded: Loaded, *, only_contested: bool = False, task_type: str | None = None,
+            status: str | None = None) -> dict[str, Any]:
+    """Two queues: findings to grade (most informative first) and verdicts without a producer grade
+    (spread across confidence bands). Filters narrow both queues."""
     findings_groups = []
     producer_groups = []
     for path, verdict in loaded.verdicts:
+        if task_type is not None and (verdict.task_type or "(none)") != task_type:
+            continue
+        if status is not None and verdict.status != status:
+            continue
         items = []
         for review in verdict.reviews:
             for number, finding in enumerate(review.findings, 1):
@@ -239,17 +282,20 @@ def pending(loaded: Loaded) -> dict[str, Any]:
                               "contested": contested(verdict, review, finding)})
         ungraded_reviews = [{"judge": r.judge, "judge_ref": _judge_ref(verdict, r)}
                             for r in verdict.reviews if r.human_review is None and _vote(r) != "abstain"]
+        if only_contested:
+            items = [i for i in items if i["contested"]]
         if items:
             findings_groups.append({**_header(path, verdict), "findings": items,
                                     "contested": any(i["contested"] for i in items),
                                     "severity_rank": min(SEVERITY_RANK.get(i["severity"], 3) for i in items)})
-        if verdict.human_verdict is None:
-            producer_groups.append({**_header(path, verdict), "reviews_without_grade": ungraded_reviews})
+        if verdict.human_verdict is None and not only_contested:
+            producer_groups.append({**_header(path, verdict), "band": _band(verdict.confidence),
+                                    "reviews_without_grade": ungraded_reviews})
     findings_groups.sort(key=lambda g: (0 if g["contested"] else 1, g["severity_rank"],
                                         -g["created_at"].timestamp(), g["run_id"]))
     for group in findings_groups:
         del group["severity_rank"]
-    producer_groups.sort(key=lambda g: (-g["created_at"].timestamp(), g["run_id"]))
+    producer_groups = _stratified(producer_groups)
     reviews_without_grade = sum(len(g["reviews_without_grade"]) for g in producer_groups)
     return {
         "counts": {
@@ -281,11 +327,13 @@ def pending_lines(result: dict[str, Any], loaded: Loaded, limit: int | None) -> 
     c = result["counts"]
     lines = [f"Pending adjudication: {c['ungraded_findings']} ungraded findings ({c['contested_findings']} contested) "
              f"in {c['verdicts_with_ungraded_findings']} verdicts; {c['verdicts_without_producer_grade']} verdicts "
-             f"without a producer grade; {c['reviews_without_grade']} reviews without an overall grade."]
+             f"without a producer grade; {c['reviews_without_grade']} reviews without an overall grade. "
+             "These totals are the backlog; grade what the listing puts first."]
     if _skipped(loaded):
         lines.append(_skipped(loaded))
     if not result["findings"] and not result["producer"]:
         return lines + ["Nothing pending."]
+    lines.append(LEGEND)
 
     if result["findings"]:
         lines += ["", "Findings to grade, most informative first. N is the finding's position as saved, "
@@ -299,25 +347,24 @@ def pending_lines(result: dict[str, Any], loaded: Loaded, limit: int | None) -> 
             lines.append(f"  {escape_controls(item['judge'])}  finding {item['number']}  [{item['severity']}]  "
                          f"{escape_controls(item['text'])}{why}")
             lines.append(f"    agentjury adjudicate {group['run_id']} --dir {folder} --judge "
-                         f"{escape_controls(item['judge_ref'])} --finding {item['number']} {FINDING_LABELS}")
+                         f"{escape_controls(item['judge_ref'])} --finding {item['number']} LABEL")
     if len(shown) < len(result["findings"]):
         lines += ["", f"{len(result['findings']) - len(shown)} more verdicts with ungraded findings not shown; "
                       "raise -n to see them."]
 
     if result["producer"]:
-        lines += ["", "Verdicts without a producer grade, newest first. Grade the output itself, across the "
-                      "whole confidence range, so the confidence index can be calibrated later."]
+        lines += ["", "Verdicts without a producer grade, spread across confidence bands and newest first within "
+                      "each, so grades of the output itself cover the whole range the confidence index spans."]
     shown = result["producer"][:limit] if limit is not None else result["producer"]
     for group in shown:
-        lines += ["", _group_line(group), *_events_note(group)]
+        lines += ["", _group_line(group, f"  [band {group['band']}]"), *_events_note(group)]
         folder = _quote(group["directory"])
-        lines.append(f"    agentjury adjudicate {group['run_id']} --dir {folder} --producer-verdict correct|flawed")
+        lines.append(f"    agentjury adjudicate {group['run_id']} --dir {folder} --producer-verdict GRADE")
         if group["reviews_without_grade"]:
             names = ", ".join(escape_controls(r["judge"]) for r in group["reviews_without_grade"])
             first = escape_controls(group["reviews_without_grade"][0]["judge_ref"])
             lines.append(f"  reviews without an overall grade: {names}")
-            lines.append(f"    agentjury adjudicate {group['run_id']} --dir {folder} --judge {first} "
-                         f"--verdict {REVIEW_LABELS}")
+            lines.append(f"    agentjury adjudicate {group['run_id']} --dir {folder} --judge {first} --verdict VIEW")
     if len(shown) < len(result["producer"]):
         lines += ["", f"{len(result['producer']) - len(shown)} more verdicts without a producer grade not shown; "
                       "raise -n to see them."]
@@ -326,10 +373,12 @@ def pending_lines(result: dict[str, Any], loaded: Loaded, limit: int | None) -> 
 
 def cmd_pending(args: argparse.Namespace) -> int:
     loaded = load(_directories(args))
-    result = pending(loaded)
+    _report_problems(loaded)
+    result = pending(loaded, only_contested=args.contested, task_type=args.task_type, status=args.status)
     if args.json:
         limit = args.n
-        payload = {"directories": [str(d) for d in loaded.directories], "unreadable": loaded.unreadable,
+        payload = {"directories": [str(d) for d in loaded.directories], "missing_directories": loaded.missing,
+                   "problems": loaded.problems, "unreadable": loaded.unreadable,
                    "duplicates": loaded.duplicates, "orphan_events": loaded.orphan_events, **result}
         if limit is not None:
             payload["findings"] = result["findings"][:limit]
@@ -376,33 +425,47 @@ def export_error(error: str) -> dict[str, Any]:
     return {"judge": judge if _NAME.match(judge) else None, "error": klass if _IDENT.match(klass) else None}
 
 
-def export_finding(finding: Finding) -> dict[str, Any]:
+class _Ids:
+    """Identity strings off the expected shape are replaced by a stable digest, never refused."""
+
+    def __init__(self) -> None:
+        self.pseudonymised = 0
+
+    def __call__(self, value: str | None) -> str | None:
+        if value is None or _ID.match(value):
+            return value
+        self.pseudonymised += 1
+        return hashlib.sha256(value.encode("utf-8")).hexdigest()[:12]
+
+
+def export_finding(finding: Finding, ids: _Ids) -> dict[str, Any]:
     evidence = finding.evidence
-    return {"id": finding.id, "severity": finding.severity, "has_evidence": evidence is not None,
+    return {"id": ids(finding.id), "severity": finding.severity, "has_evidence": evidence is not None,
             "basis_source": evidence.basis_source if evidence is not None else None,
             "adjudication": finding.adjudication, "adjudicated_at": finding.adjudicated_at}
 
 
-def export_review(review: Review) -> tuple[dict[str, Any], int]:
+def export_review(review: Review, ids: _Ids) -> tuple[dict[str, Any], int]:
     human = review.human_review
     params, dropped = export_params(review.params)
     return {
-        "review_id": review.review_id, "config_id": review.config_id, "judge": review.judge, "role": review.role,
+        "review_id": ids(review.review_id), "config_id": ids(review.config_id), "judge": review.judge,
+        "role": review.role,
         "provider": review.provider, "model": review.model, "observed_model": review.observed_model,
         "vote": _vote(review), "score": review.score, "self_confidence": review.self_confidence,
-        "rubric_version": review.rubric_version, "prompt_hash": review.prompt_hash, "params": params,
+        "rubric_version": review.rubric_version, "prompt_hash": ids(review.prompt_hash), "params": params,
         "latency_ms": review.latency_ms, "tokens_in": review.tokens_in, "tokens_out": review.tokens_out,
         "created_at": review.created_at,
         "human_review": None if human is None else {"verdict": human.verdict, "reviewed_at": human.reviewed_at},
-        "findings": [export_finding(f) for f in review.findings],
+        "findings": [export_finding(f, ids) for f in review.findings],
     }, dropped
 
 
-def export_verdict(verdict: Verdict) -> tuple[dict[str, Any], int]:
+def export_verdict(verdict: Verdict, ids: _Ids) -> tuple[dict[str, Any], int]:
     """Only identities, numbers, labels and timestamps: nothing that was reviewed."""
-    reviews = [export_review(r) for r in verdict.reviews]
+    reviews = [export_review(r, ids) for r in verdict.reviews]
     return {
-        "run_id": verdict.run_id, "request_id": verdict.request_id, "panel_id": verdict.panel_id,
+        "run_id": ids(verdict.run_id), "request_id": ids(verdict.request_id), "panel_id": ids(verdict.panel_id),
         "schema_version": verdict.schema_version, "created_at": verdict.created_at,
         "task_type": verdict.task_type, "domain": verdict.domain,
         "producer": {"framework": verdict.producer.framework, "provider": verdict.producer.provider,
@@ -420,14 +483,15 @@ def export_verdict(verdict: Verdict) -> tuple[dict[str, Any], int]:
     }, sum(d for _, d in reviews)
 
 
-def export_event(event: dict[str, Any]) -> dict[str, Any]:
-    allowed = {("events", "*", key): shape for (section, _, key), shape in
-               ((k, v) for k, v in STRING_PATHS.items() if k[0] == "events")}
+def export_event(event: dict[str, Any], ids: _Ids) -> dict[str, Any]:
     out: dict[str, Any] = {}
-    for (_, _, key), shape in allowed.items():
+    for path, shape in STRING_PATHS.items():
+        if len(path) != 3 or path[0] != "events":
+            continue
+        key = path[2]
         value = event.get(key)
-        if value is None:
-            out[key] = None
+        if isinstance(value, str) and shape is _ID:
+            out[key] = ids(value)
         elif isinstance(value, str) and _matches(shape, value):
             out[key] = value
         else:
@@ -444,7 +508,9 @@ def _matches(shape: Any, value: str) -> bool:
 
 
 def build_export(loaded: Loaded, exported_at: datetime | None = None) -> dict[str, Any]:
-    exported = [export_verdict(v) for _, v in loaded.verdicts]
+    ids = _Ids()
+    exported = [export_verdict(v, ids) for _, v in loaded.verdicts]
+    events = [export_event(e, ids) for e in loaded.events]
     verdicts = [v for v, _ in exported]
     reviews = [r for v in verdicts for r in v["reviews"]]
     findings = [f for r in reviews for f in r["findings"]]
@@ -458,11 +524,11 @@ def build_export(loaded: Loaded, exported_at: datetime | None = None) -> dict[st
             "producer_grades": sum(1 for v in verdicts if v["human_verdict"] is not None),
             "events": len(loaded.events), "orphan_events": loaded.orphan_events,
             "pending_events": sum(v["pending_event_count"] for v in verdicts),
-            "params_dropped": sum(d for _, d in exported),
+            "params_dropped": sum(d for _, d in exported), "ids_pseudonymised": ids.pseudonymised,
             "unreadable": loaded.unreadable, "duplicates": loaded.duplicates,
         },
         "verdicts": verdicts,
-        "events": [export_event(e) for e in loaded.events],
+        "events": events,
     }
 
 
@@ -502,7 +568,8 @@ def export_summary(document: dict[str, Any]) -> list[str]:
              f"({c['graded_findings']} graded), {c['graded_reviews']} review grades, {c['producer_grades']} producer "
              f"grades and {c['events']} events ({c['orphan_events']} for verdicts not read).",
              f"Counted only: {c['pending_events']} unpublished events, {c['params_dropped']} reviewer parameters "
-             f"outside the allowlist, {c['unreadable']} unreadable and {c['duplicates']} duplicate records.",
+             f"outside the allowlist, {c['ids_pseudonymised']} identifiers replaced by digests, "
+             f"{c['unreadable']} unreadable and {c['duplicates']} duplicate records.",
              "No reviewed text, excerpts, reasons, notes, error messages, adjudicator names or file paths are included."]
     labels = free_text_values(document)
     if labels:
@@ -513,6 +580,7 @@ def export_summary(document: dict[str, Any]) -> list[str]:
 
 def cmd_export(args: argparse.Namespace) -> int:
     loaded = load(_directories(args))
+    _report_problems(loaded)
     document = build_export(loaded)
     serialised = json.loads(json.dumps(document, default=_json_default))
     offending = audit_export(serialised)
@@ -668,7 +736,9 @@ def cmd_stats(args: argparse.Namespace) -> int:
             print("Not an AgentJury adjudication export of a supported version.", file=sys.stderr)
             return EXIT_INVALID
     else:
-        document = json.loads(json.dumps(build_export(load(_directories(args))), default=_json_default))
+        loaded = load(_directories(args))
+        _report_problems(loaded)
+        document = json.loads(json.dumps(build_export(loaded), default=_json_default))
     result = stats(document)
     if args.json:
         result["disclaimer"] = DISCLAIMER
@@ -686,6 +756,10 @@ def add_parser(sub: argparse._SubParsersAction) -> None:
     p = commands.add_parser("pending", help="List ungraded findings, most informative first, with the grading commands.")
     p.add_argument("--dir", action="append", help=directory_help)
     p.add_argument("-n", type=int, default=20, help="Verdicts to show per section (default: 20).")
+    p.add_argument("--contested", action="store_true", help="Only findings whose reviewer disagreed with the outcome.")
+    p.add_argument("--task-type", help="Only verdicts with this task type ((none) for untyped).")
+    p.add_argument("--status", choices=["verified", "needs_revision", "blocked", "insufficient_jury"],
+                   help="Only verdicts with this status.")
     p.add_argument("--json", action="store_true", help="Print structured data.")
     p.set_defaults(func=cmd_pending)
 
@@ -695,7 +769,8 @@ def add_parser(sub: argparse._SubParsersAction) -> None:
     e.set_defaults(func=cmd_export)
 
     s = commands.add_parser("stats", help="Descriptive counts of grades per reviewer configuration and task type.")
-    s.add_argument("--dir", action="append", help=directory_help)
-    s.add_argument("--from", dest="source", metavar="EXPORT", help="Read an export file instead of verdict directories.")
+    where = s.add_mutually_exclusive_group()
+    where.add_argument("--dir", action="append", help=directory_help)
+    where.add_argument("--from", dest="source", metavar="EXPORT", help="Read an export file instead of verdict directories.")
     s.add_argument("--json", action="store_true", help="Print structured data.")
     s.set_defaults(func=cmd_stats)

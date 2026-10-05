@@ -1,6 +1,7 @@
 """Pending findings, the text-free export and descriptive stats, on crafted verdicts. No API keys."""
 
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -15,6 +16,94 @@ from agentjury.protocol import ArtifactCoverage, HumanReview, LocalSignal, Produ
 SENTINEL = "ZQX-SENTINEL-TEXT"
 T0 = datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc)
 ROOT = Path(__file__).resolve().parent.parent
+EXPORT_PATHS = [
+    "agentjury_version",
+    "counts/duplicates",
+    "counts/events",
+    "counts/findings",
+    "counts/graded_findings",
+    "counts/graded_reviews",
+    "counts/ids_pseudonymised",
+    "counts/orphan_events",
+    "counts/params_dropped",
+    "counts/pending_events",
+    "counts/producer_grades",
+    "counts/reviews",
+    "counts/unreadable",
+    "counts/verdicts",
+    "events/*/at",
+    "events/*/config_id",
+    "events/*/event_id",
+    "events/*/finding_id",
+    "events/*/judge",
+    "events/*/kind",
+    "events/*/new",
+    "events/*/old",
+    "events/*/request_id",
+    "events/*/review_id",
+    "events/*/run_id",
+    "exported_at",
+    "kind",
+    "verdicts/*/abstained",
+    "verdicts/*/adjudicated_at",
+    "verdicts/*/artifact_coverage/full",
+    "verdicts/*/artifact_coverage/omitted",
+    "verdicts/*/confidence",
+    "verdicts/*/consensus",
+    "verdicts/*/created_at",
+    "verdicts/*/diversity",
+    "verdicts/*/domain",
+    "verdicts/*/down",
+    "verdicts/*/error_count",
+    "verdicts/*/errors/*/error",
+    "verdicts/*/errors/*/judge",
+    "verdicts/*/human_verdict",
+    "verdicts/*/local_guard_applied",
+    "verdicts/*/local_signal_rules/*",
+    "verdicts/*/panel_id",
+    "verdicts/*/pending_event_count",
+    "verdicts/*/producer/framework",
+    "verdicts/*/producer/model",
+    "verdicts/*/producer/provider",
+    "verdicts/*/quorum",
+    "verdicts/*/request_id",
+    "verdicts/*/requested",
+    "verdicts/*/responded",
+    "verdicts/*/reviews/*/config_id",
+    "verdicts/*/reviews/*/created_at",
+    "verdicts/*/reviews/*/findings/*/adjudicated_at",
+    "verdicts/*/reviews/*/findings/*/adjudication",
+    "verdicts/*/reviews/*/findings/*/basis_source",
+    "verdicts/*/reviews/*/findings/*/has_evidence",
+    "verdicts/*/reviews/*/findings/*/id",
+    "verdicts/*/reviews/*/findings/*/severity",
+    "verdicts/*/reviews/*/human_review",
+    "verdicts/*/reviews/*/human_review/reviewed_at",
+    "verdicts/*/reviews/*/human_review/verdict",
+    "verdicts/*/reviews/*/judge",
+    "verdicts/*/reviews/*/latency_ms",
+    "verdicts/*/reviews/*/model",
+    "verdicts/*/reviews/*/observed_model",
+    "verdicts/*/reviews/*/params/route",
+    "verdicts/*/reviews/*/params/timeout",
+    "verdicts/*/reviews/*/prompt_hash",
+    "verdicts/*/reviews/*/provider",
+    "verdicts/*/reviews/*/review_id",
+    "verdicts/*/reviews/*/role",
+    "verdicts/*/reviews/*/rubric_version",
+    "verdicts/*/reviews/*/score",
+    "verdicts/*/reviews/*/self_confidence",
+    "verdicts/*/reviews/*/tokens_in",
+    "verdicts/*/reviews/*/tokens_out",
+    "verdicts/*/reviews/*/vote",
+    "verdicts/*/run_id",
+    "verdicts/*/schema_version",
+    "verdicts/*/score",
+    "verdicts/*/status",
+    "verdicts/*/task_type",
+    "verdicts/*/up",
+    "version",
+]
 
 
 @pytest.fixture
@@ -75,7 +164,9 @@ def test_pending_orders_by_disagreement_and_numbers_findings_as_saved(workspace,
     assert [(f["number"], f["contested"]) for f in groups[1]["findings"]] == [
         (1, "voted revise; the panel verified"), (2, "voted revise; the panel verified")]
     assert groups[2]["findings"][0]["contested"] is None
-    assert [g["run_id"] for g in payload["producer"]] == [quiet_new.run_id, quiet_old.run_id, overruled.run_id, decisive.run_id]
+    # Producer grades interleave confidence bands from the highest down, newest first within a band.
+    assert [(g["run_id"], g["band"]) for g in payload["producer"]] == [
+        (quiet_new.run_id, "50-75%"), (overruled.run_id, "25-50%"), (decisive.run_id, "0-25%"), (quiet_old.run_id, "50-75%")]
 
     second = groups[1]["findings"][1]
     assert main(["adjudicate", overruled.run_id, "--dir", str(directory), "--judge", second["judge_ref"],
@@ -106,10 +197,10 @@ def test_pending_text_output_commands_limit_and_escaping(workspace, capsys):
     assert "1 more verdicts with ungraded findings not shown" in shown
     assert "1 more verdicts without a producer grade not shown" in shown
     assert "Bad\\x1b[31m  (voted revise; the panel verified)" in shown and "\x1b" not in shown
-    assert (f'agentjury adjudicate {split.run_id} --dir "{directory}" --judge critic/anthropic --finding 1 '
-            "correct|partially_correct|wrong") in shown
-    assert f'agentjury adjudicate {other.run_id} --dir "{directory}" --producer-verdict correct|flawed' in shown
-    assert f'agentjury adjudicate {other.run_id} --dir "{directory}" --judge accuracy/openai --verdict agree|partial|disagree' in shown
+    assert f'agentjury adjudicate {split.run_id} --dir "{directory}" --judge critic/anthropic --finding 1 LABEL' in shown
+    assert f'agentjury adjudicate {other.run_id} --dir "{directory}" --producer-verdict GRADE' in shown
+    assert f'agentjury adjudicate {other.run_id} --dir "{directory}" --judge accuracy/openai --verdict VIEW' in shown
+    assert adjudication.LEGEND in shown and "|" not in shown.replace("|flawed", "")  and "[band 50-75%]" in shown
     assert "reviews without an overall grade: accuracy/openai, critic/anthropic" in shown
     assert "1 adjudication events not yet in adjudications.jsonl" in shown
     assert "confidence" in shown and "[contested]" in shown
@@ -200,7 +291,7 @@ def test_export_contains_grades_and_identities_but_no_text(workspace, capsys):
     assert document["kind"] == "agentjury.adjudication.export" and document["version"] == 1
     assert document["counts"] == {"verdicts": 1, "reviews": 2, "findings": 1, "graded_findings": 1, "graded_reviews": 1,
                                   "producer_grades": 1, "events": 1, "orphan_events": 0, "pending_events": 1,
-                                  "params_dropped": 2, "unreadable": 0, "duplicates": 0}
+                                  "params_dropped": 2, "ids_pseudonymised": 0, "unreadable": 0, "duplicates": 0}
     [exported] = document["verdicts"]
     assert exported["producer"] == {"framework": "claude-code", "provider": "anthropic", "model": "claude-x"}
     assert exported["artifact_coverage"] == {"full": 1, "omitted": 1}
@@ -233,13 +324,20 @@ def test_export_audit_catches_strings_outside_the_allowlist():
         "domain": ["python"], "task_type": ["code_change"]}
 
 
-def test_export_refuses_a_value_off_its_shape(workspace, capsys):
+def test_export_replaces_odd_identifiers_with_digests(workspace, capsys):
     item = crafted_verdict()
-    item.run_id = "has space"
-    save(workspace / ".agentjury" / "verdicts", item)
-    assert main(["adjudication", "export"]) == 5
+    item.request_id = "Write the Q3 memo"
+    directory = save(workspace / ".agentjury" / "verdicts", item)
+    (directory / "adjudications.jsonl").write_text(json.dumps({
+        "event_id": "evt1", "kind": "producer", "run_id": item.run_id, "request_id": item.request_id,
+        "old": None, "new": "flawed"}) + "\n", encoding="utf-8")
+    assert main(["adjudication", "export"]) == 0
     out, err = capsys.readouterr()
-    assert out == "" and "Export refused" in err and "verdicts/*/run_id" in err and "has space" not in err
+    document = json.loads(out)
+    assert "Write the Q3 memo" not in out and document["counts"]["ids_pseudonymised"] == 2
+    digest = document["verdicts"][0]["request_id"]
+    assert re.fullmatch(r"[0-9a-f]{12}", digest) and document["events"][0]["request_id"] == digest
+    assert "2 identifiers replaced by digests" in err and adjudication.audit_export(document) == []
 
 
 def test_export_to_stdout_reads_several_directories_and_skips_bad_records(workspace, capsys):
@@ -252,13 +350,17 @@ def test_export_to_stdout_reads_several_directories_and_skips_bad_records(worksp
     (first / "adjudications.jsonl").write_text(event + "\nnot json\n", encoding="utf-8")
     (second / "adjudications.jsonl").write_text(event + "\n" + orphan + "\n" + json.dumps({"no": "id"}) + "\n", encoding="utf-8")
 
-    assert main(["adjudication", "export", "--dir", str(first), "--dir", str(second)]) == 0
+    assert main(["adjudication", "export", "--dir", str(first), "--dir", str(second), "--dir", str(workspace / "nope")]) == 0
     out, err = capsys.readouterr()
     document = json.loads(out)
     assert document["counts"]["verdicts"] == 1 and document["counts"]["events"] == 2
     assert document["counts"]["orphan_events"] == 1
     assert document["counts"]["unreadable"] == 3 and document["counts"]["duplicates"] == 2
     assert SENTINEL not in out and "3 unreadable and 2 duplicate" in err and "1 for verdicts not read" in err
+    assert f"Skipped {first / 'broken.json'}: not a readable verdict" in err
+    assert f"Skipped {first / 'adjudications.jsonl'}:2: not JSON; adjudicate cannot publish history" in err
+    assert f"Skipped {second / 'adjudications.jsonl'}:3: not an adjudication event" in err
+    assert f"Not a directory: {workspace / 'nope'}" in err and "nope" not in out
 
 
 def test_duplicate_verdicts_keep_the_more_graded_copy(workspace, capsys):
@@ -323,6 +425,9 @@ def test_stats_count_grades_per_configuration_and_agree_with_export(workspace, c
 
 def test_stats_rejects_other_files(workspace, capsys):
     (workspace / "other.json").write_text('{"kind": "something"}', encoding="utf-8")
+    with pytest.raises(SystemExit) as stopped:
+        main(["adjudication", "stats", "--from", str(workspace / "other.json"), "--dir", str(workspace)])
+    assert stopped.value.code == 2
     assert main(["adjudication", "stats", "--from", str(workspace / "other.json")]) == 5
     assert "Not an AgentJury adjudication export" in capsys.readouterr().err
     assert main(["adjudication", "stats", "--from", str(workspace / "missing.json")]) == 5
@@ -352,3 +457,93 @@ def test_aggregation_never_reads_grades():
         source = (ROOT / "agentjury" / name).read_text(encoding="utf-8")
         assert "adjudication" not in source.lower() or name == "judges/base.py" and "adjudications.jsonl" not in source
         assert "adjudications.jsonl" not in source and "human_verdict" not in source
+
+
+def test_pending_commands_record_nothing_until_edited(workspace, capsys):
+    item = verdict(approve("accuracy", "openai"), approve("executive", "openai"),
+                   revise("critic", "anthropic", [finding("A", "minor")]))
+    directory = save(workspace / ".agentjury" / "verdicts", item)
+    assert main(["adjudication", "pending"]) == 0
+    commands = [line.strip() for line in capsys.readouterr().out.splitlines()
+                if line.strip().startswith("agentjury adjudicate")]
+    assert len(commands) == 3
+    for command in commands:
+        assert not any(ch in command for ch in "|<>;&$`")
+        try:
+            code = main(command.split()[1:])
+        except SystemExit as stopped:
+            code = stopped.code
+        assert code not in (0, None), command
+    reloaded = Verdict.model_validate_json((directory / item.filename).read_text(encoding="utf-8"))
+    assert reloaded.human_verdict is None
+    assert all(f.adjudication is None for r in reloaded.reviews for f in r.findings)
+    assert all(r.human_review is None for r in reloaded.reviews)
+
+
+def test_pending_filters(workspace, capsys):
+    contested = verdict(approve("accuracy", "openai"), approve("executive", "openai"),
+                        revise("critic", "anthropic", [finding("A", "minor")]))
+    quiet = verdict(approve("accuracy", "openai", findings=[finding("B", "minor")]), approve("critic", "anthropic"),
+                    task_type="summary")
+    save(workspace / ".agentjury" / "verdicts", contested, quiet)
+    assert main(["adjudication", "pending", "--contested", "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert [g["run_id"] for g in payload["findings"]] == [contested.run_id] and payload["producer"] == []
+    assert main(["adjudication", "pending", "--task-type", "summary", "--json"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert [g["run_id"] for g in payload["findings"]] == [quiet.run_id]
+    assert [g["run_id"] for g in payload["producer"]] == [quiet.run_id]
+    assert main(["adjudication", "pending", "--status", "verified", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["counts"]["verdicts_with_ungraded_findings"] == 2
+
+
+def test_pending_prints_on_legacy_windows_stdout(workspace, monkeypatch):
+    import io
+    import sys
+    save(workspace / ".agentjury" / "verdicts",
+         verdict(approve("accuracy", "openai"), revise("critic", "anthropic", [finding("A", "minor")])))
+    buffer = io.BytesIO()
+    with io.TextIOWrapper(buffer, encoding="cp1252") as stdout:
+        monkeypatch.setattr(sys, "stdout", stdout)
+        result = main(["adjudication", "pending"])
+        stdout.flush()
+        rendered = buffer.getvalue().decode("cp1252")
+    assert result == 0 and "finding 1  [minor]  A" in rendered
+
+
+def test_export_key_paths_are_the_documented_set(workspace, capsys):
+    item = crafted_verdict()
+    directory = save(workspace / ".agentjury" / "verdicts", item)
+    (directory / "adjudications.jsonl").write_text(json.dumps({
+        "event_id": "evt1", "at": "2026-10-03T20:00:00+00:00", "kind": "finding", "run_id": item.run_id,
+        "request_id": item.request_id, "review_id": "r", "config_id": "c", "judge": "critic/anthropic",
+        "finding_id": "f", "old": None, "new": "wrong"}) + "\n", encoding="utf-8")
+    assert main(["adjudication", "export"]) == 0
+    document = json.loads(capsys.readouterr().out)
+
+    def paths(value, prefix=()):
+        if isinstance(value, dict):
+            for key, item in value.items():
+                yield from paths(item, prefix + (key,))
+        elif isinstance(value, list):
+            for item in value:
+                yield from paths(item, prefix + ("*",))
+        else:
+            yield "/".join(prefix)
+
+    # Any new key here is a new thing that leaves with an export: update docs/SECURITY.md too.
+    assert sorted(set(paths(document))) == EXPORT_PATHS
+
+
+def test_hermes_imports_only_symbols_published_in_0_5_0():
+    import ast
+    allowed = {"Artifact", "ArtifactCoverage", "Panel", "Producer", "ReviewRequest", "Verdict", "panel_config",
+               "load_roles", "escape_controls", "agentjury"}
+    for name in ("jury.py", "__init__.py"):
+        tree = ast.parse((ROOT / "integrations" / "hermes" / name).read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("agentjury"):
+                assert node.module.split(".")[1:2] in ([], ["judges"], ["reviewer_guard"], ["panel_config"]), node.module
+                assert {alias.name for alias in node.names} <= allowed, (name, node.module)
+            if isinstance(node, ast.Import):
+                assert {alias.name for alias in node.names if alias.name.startswith("agentjury")} <= allowed
