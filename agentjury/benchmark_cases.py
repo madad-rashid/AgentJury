@@ -44,13 +44,20 @@ class _CasePack(BaseModel):
         return self
 
 
-def load_cases(path: Path | None) -> tuple[list[BenchmarkCase], str]:
+PACKS = {"starter": "starter.json", "code": "code_cases.json"}
+
+
+def load_cases(path: Path | None, pack: str = "starter") -> tuple[list[BenchmarkCase], str]:
+    """Cases from ``path``, or from the packaged ``pack`` (``starter`` or ``code``) when ``path`` is None."""
     try:
-        raw = path.read_bytes() if path is not None else resources.files("agentjury").joinpath("data/starter.json").read_bytes()
+        if path is not None:
+            raw = path.read_bytes()
+        else:
+            raw = resources.files("agentjury").joinpath(f"data/{PACKS[pack]}").read_bytes()
         if raw.startswith(b"\xef\xbb\xbf"):
             raise ValueError("UTF-8 BOM is unsupported")
         pack = _CasePack.model_validate(json.loads(raw.decode("utf-8")))
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValidationError, ValueError, TypeError) as exc:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValidationError, ValueError, TypeError, KeyError) as exc:
         raise ValueError(f"Invalid case file ({type(exc).__name__}).") from None
     return pack.cases, hashlib.sha256(raw).hexdigest()
 
