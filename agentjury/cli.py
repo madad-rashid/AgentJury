@@ -8,6 +8,7 @@ Command-line interface.
     agentjury adjudicate ID [--judge J] [--finding N LABEL]... [--verdict agree|partial|disagree]
                             [--producer-verdict correct|flawed] [--note TEXT] [--dir DIR]
     agentjury change candidates|prepare|send|status ...   (see agentjury/change_review.py)
+    agentjury adjudication pending|export|stats ...       (see agentjury/adjudication.py)
 
 Verdicts are saved to and read from --dir, else $AGENTJURY_VERDICT_DIR, else .agentjury/verdicts.
 
@@ -502,6 +503,8 @@ def main(argv: list[str] | None = None) -> int:
     a.set_defaults(func=cmd_benchmark_audit)
 
     change_review.add_parser(sub)
+    from . import adjudication
+    adjudication.add_parser(sub)
 
     args = parser.parse_args(argv)
     return args.func(args)
