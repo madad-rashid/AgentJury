@@ -227,7 +227,8 @@ def test_pending_reads_several_directories_and_names_each_verdicts_own(workspace
                                               revise("critic", "anthropic", [finding("B", "minor")]), created_at=T0 + timedelta(days=1)))
     assert main(["adjudication", "pending", "--dir", str(first), "--dir", str(second), "--dir", str(first)]) == 0
     shown = capsys.readouterr().out
-    assert f"--dir {second} --judge critic/anthropic" in shown and f"--dir {first} --judge critic/anthropic" in shown
+    assert f"--dir {shell(second)} --judge critic/anthropic" in shown
+    assert f"--dir {shell(first)} --judge critic/anthropic" in shown
     assert "Skipped" not in shown
     assert verdict_dirs([str(first), str(first), str(second)]) == [first, second]
 
@@ -294,8 +295,13 @@ def test_contested_rules_cover_dissent_blocking_the_local_guard_and_abstention(w
     assert guarded.local_guard_applied and own_block.up > own_block.down
     save(workspace / ".agentjury" / "verdicts", dissent, own_block, guarded, abstained)
     assert main(["adjudication", "pending", "--json"]) == 0
-    groups = {g["run_id"]: g for g in json.loads(capsys.readouterr().out)["findings"]}
+    payload = json.loads(capsys.readouterr().out)
+    groups = {g["run_id"]: g for g in payload["findings"]}
     reasons = {run: [f["contested"] for f in g["findings"]] for run, g in groups.items()}
+    # An abstaining review can still be graded, so it stays in the backlog.
+    producer = {g["run_id"]: g for g in payload["producer"]}
+    assert [r["judge"] for r in producer[abstained.run_id]["reviews_without_grade"]] == [
+        "accuracy/openai", "critic/anthropic", "executive/openai"]
     assert reasons[dissent.run_id] == ["voted approve; the panel revised", None, None]
     assert reasons[own_block.run_id] == ["blocking finding changed the outcome"]
     assert reasons[guarded.run_id] == [None] and reasons[abstained.run_id] == [None]
@@ -318,6 +324,17 @@ def test_duplicate_copy_with_more_review_grades_wins(workspace, capsys):
         assert main(["adjudication", "export", "--dir", str(order[0]), "--dir", str(order[1])]) == 0
         counts = json.loads(capsys.readouterr().out)["counts"]
         assert (counts["graded_findings"], counts["graded_reviews"], counts["duplicates"]) == (0, 2, 1)
+    # Equal grade counts: the later instant wins, whatever the offset it was written with.
+    east = base.model_copy(deep=True)
+    east.reviews[0].findings[0].adjudication = "correct"
+    east.reviews[0].findings[0].adjudicated_at = datetime(2026, 10, 1, 12, 0, tzinfo=timezone(timedelta(hours=5)))
+    utc = base.model_copy(deep=True)
+    utc.reviews[0].findings[0].adjudication = "wrong"
+    utc.reviews[0].findings[0].adjudicated_at = datetime(2026, 10, 1, 8, 0, tzinfo=timezone.utc)
+    for order in ((save(workspace / "c", east), save(workspace / "d", utc)), (workspace / "d", workspace / "c")):
+        assert main(["adjudication", "export", "--dir", str(order[0]), "--dir", str(order[1])]) == 0
+        document = json.loads(capsys.readouterr().out)
+        assert document["verdicts"][0]["reviews"][0]["findings"][0]["adjudication"] == "wrong"
 
 
 def test_printed_commands_are_quoted_for_the_shell(workspace, capsys):
@@ -340,18 +357,57 @@ def test_printed_commands_are_quoted_for_the_shell(workspace, capsys):
             assert code not in (0, None), command
     assert adjudication._shell("plain/name_1.2:3") == "plain/name_1.2:3"
     assert adjudication._shell("a b") != "a b" and adjudication._shell("$x") != "$x"
+    assert adjudication._command("run", "--dir", "d", "--judge", "it\u2019s", "--finding", "1", "LABEL") is None
+    assert adjudication._command("-x", "--dir", "d", "--producer-verdict", "GRADE") is None
+    assert adjudication._command("run", "--dir", "d\n") is None
+
+
+def test_windows_quoting_targets_powershell(monkeypatch):
+    monkeypatch.setattr(adjudication.os, "name", "nt")
+    assert adjudication._shell(r"C:\Users\me\.agentjury\verdicts") == r"C:\Users\me\.agentjury\verdicts"
+    assert adjudication._shell("odd $x 'y; z") == "'odd $x ''y; z'"
+    assert adjudication._command("run", "--dir", "a & calc") is None
+    assert adjudication._command("run", "--dir", r"C:\My Verdicts") == r"agentjury adjudicate run --dir 'C:\My Verdicts'"
+
+
+def test_renamed_verdict_files_are_named_by_path(workspace, capsys):
+    item = verdict(approve("accuracy", "openai"), revise("critic", "anthropic", [finding("A", "minor")]))
+    directory = workspace / ".agentjury" / "verdicts"
+    directory.mkdir(parents=True)
+    path = directory / "odd.json"
+    path.write_text(item.model_dump_json(), encoding="utf-8")
+    assert main(["adjudication", "pending"]) == 0
+    [command] = [line.strip() for line in capsys.readouterr().out.splitlines() if "--finding 1 LABEL" in line]
+    assert command.startswith(f"agentjury adjudicate {shell(Path('.agentjury') / 'verdicts' / 'odd.json')} --dir ")
+    assert main(["adjudicate", str(path), "--dir", str(directory), "--judge", "critic/anthropic", "--finding", "1", "correct"]) == 0
+    assert Verdict.model_validate_json(path.read_text(encoding="utf-8")).reviews[1].findings[0].adjudication == "correct"
+
+
+def test_load_names_odd_entries_and_deep_nesting(workspace, capsys):
+    directory = save(workspace / ".agentjury" / "verdicts",
+                     verdict(approve("accuracy", "openai"), revise("critic", "anthropic", [finding("A", "minor")])))
+    (directory / "dir.json").mkdir()
+    (directory / "adjudications.jsonl").write_text("[" * 100000 + "\n", encoding="utf-8")
+    assert main(["adjudication", "pending", "--json"]) == 0
+    captured = capsys.readouterr()
+    assert json.loads(captured.out)["unreadable"] == 2
+    assert "dir.json: not a regular file" in captured.err and "adjudications.jsonl:1: not JSON" in captured.err
 
 
 def test_identifiers_with_control_characters_get_no_command(workspace, capsys):
     item = verdict(approve("accuracy", "openai"), revise("critic", "anthropic", [finding("A", "minor")]))
     item.run_id = "run\x1b[31m"
+    item.reviews[1].judge = "critic\x1b[31m/anthropic"
     directory = workspace / ".agentjury" / "verdicts"
     directory.mkdir(parents=True)
     (directory / "odd.json").write_text(item.model_dump_json(), encoding="utf-8")
     assert main(["adjudication", "pending"]) == 0
     shown = capsys.readouterr().out
-    assert "\x1b" not in shown and "run\\x1b[31m" in shown
-    assert "agentjury adjudicate" not in shown and adjudication.NO_COMMAND in shown
+    assert "\x1b" not in shown and "run\\x1b[31m" in shown and "critic\\x1b[31m/anthropic  finding 1" in shown
+    # The finding command would carry the judge name, so it is withheld; the producer command names
+    # the file instead of the run ID and is safe to print.
+    assert "--finding 1 LABEL" not in shown and shown.count(adjudication.NO_COMMAND) == 1
+    assert "--producer-verdict GRADE" in shown
 
 
 def test_limit_rejects_negatives_and_zero_shows_only_counts(workspace, capsys):
@@ -422,6 +478,8 @@ def test_export_refuses_from_the_command_and_reports_write_failures(workspace, c
     assert "Could not write" in capsys.readouterr().err
     assert adjudication._param_value("timeout", float("nan")) is None
     assert adjudication._param_value("max_tokens", float("inf")) is None
+    assert adjudication._param_value("max_tokens", 10**400) is None and adjudication._param_value("timeout", 2**53) is None
+    assert adjudication._param_value("timeout", 30) == 30 and adjudication._param_value("timeout", 2.5) == 2.5
     assert adjudication.export_params({"timeout": float("nan"), "max_tokens": 10}) == ({"max_tokens": 10}, 1)
     assert adjudication.export_error("critic/anthropic: TimeoutError: took 30s") == {"judge": "critic/anthropic", "error": "TimeoutError"}
     assert adjudication.export_error("critic/anthropic: zsent_token_leak") == {"judge": None, "error": None}
@@ -441,13 +499,24 @@ def test_stats_from_rejects_malformed_exports_without_tracebacks(workspace, caps
         {**head, "verdicts": [{"reviews": [{"judge": 5, "findings": []}]}]},
         {**head, "verdicts": [{"reviews": [{"rubric_version": "0.7 beta", "findings": []}]}]},
         {**head, "verdicts": [{"reviews": [{"findings": [{"adjudication": ["wrong"]}]}]}]},
+        {**head, "verdicts": [{"reviews": [{"findings": [], "k\x1b[31m": "v"}]}]},
     ]
     for number, document in enumerate(broken):
         path = workspace / f"broken{number}.json"
         path.write_text(json.dumps(document), encoding="utf-8")
         assert main(["adjudication", "stats", "--from", str(path)]) == 5, document
         captured = capsys.readouterr()
-        assert captured.out == "" and "Not a" in captured.err, document
+        assert captured.out == "" and "Not a" in captured.err and "\x1b" not in captured.err, document
+    nested = workspace / "nested.json"
+    nested.write_text("[" * 100000, encoding="utf-8")
+    assert main(["adjudication", "stats", "--from", str(nested)]) == 5
+    assert "Cannot read" in capsys.readouterr().err
+    infinite = {**head, "verdicts": [{"status": "verified", "reviews": [{"config_id": "c", "vote": "approve",
+                                                                           "params": {"timeout": 1e400}, "findings": []}]}]}
+    (workspace / "infinite.json").write_text(json.dumps(infinite), encoding="utf-8")
+    assert main(["adjudication", "stats", "--from", str(workspace / "infinite.json"), "--json"]) == 0
+    shown = capsys.readouterr().out
+    assert "Infinity" not in shown and json.loads(shown)["configurations"][0]["params"] == {}
     hostile = {**head, "verdicts": [{"status": "verified", "human_verdict": "flawed", "task_type": "t\x1b[31m",
                                      "reviews": [{"judge": "j\x1b[31m", "config_id": "c", "vote": "approve",
                                                   "rubric_version": "0.7", "prompt_hash": "deadbeef0000",
@@ -736,6 +805,7 @@ def test_pending_filters(workspace, capsys):
     assert main(["adjudication", "pending", "--contested", "--json"]) == 0
     payload = json.loads(capsys.readouterr().out)
     assert [g["run_id"] for g in payload["findings"]] == [contested.run_id] and payload["producer"] == []
+    assert payload["counts"]["verdicts_without_producer_grade"] == 2  # the header stays the whole backlog
     assert main(["adjudication", "pending", "--task-type", "summary", "--json"]) == 0
     payload = json.loads(capsys.readouterr().out)
     assert [g["run_id"] for g in payload["findings"]] == [quiet.run_id]

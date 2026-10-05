@@ -52,8 +52,13 @@ uniquely (the judge name, or the review ID when two reviews share a name).
 Placeholders are the bare words `LABEL`, `GRADE` and `VIEW`, which
 `adjudicate` rejects, so a pasted command records nothing until edited.
 Directory and identifier values outside a safe character set are quoted for
-the shell (POSIX quoting, or PowerShell quoting on Windows), and a record whose
-identifiers contain control characters gets a note instead of a command.
+the shell (POSIX quoting, or PowerShell quoting on Windows; cmd.exe is not a
+target), and a record whose identifiers contain control characters,
+typographic quotes or, on Windows, cmd.exe metacharacters gets a note instead
+of a command. A verdict is named by its run ID when its file name carries that
+ID uniquely, otherwise by its file path, which `adjudicate` also accepts. The
+header's totals stay the whole backlog under every filter, including
+`--contested`, which only hides the second queue.
 Unpublished adjudication events are flagged on the verdict's header. Exit 0.
 
 ### `export [--dir DIR]... [--out FILE]`
@@ -91,9 +96,9 @@ off the expected shape are replaced by a stable 12-hex digest and counted. A
 structural audit then checks every string in the document against the
 allowlist of paths and shapes; any other string refuses the export with the
 path, exit 5; a non-finite number refuses it too. The summary names the counts
-and the distinct free-text labels that leave (judge, model, requested model,
-role, task type, domain and producer labels), so a tester reviews them before
-sharing. Without `--out`, the document goes to
+and the distinct free-text labels that leave (judge, model, observed model,
+requested model, role, task type, domain and producer labels), so a tester
+reviews them before sharing. Without `--out`, the document goes to
 standard output and the summary to standard error.
 
 ### `stats [--dir DIR]... | --from EXPORT [--json]`

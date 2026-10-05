@@ -121,13 +121,14 @@ class Loaded:
     orphan_events: int = 0
 
 
-def _grading_progress(verdict: Verdict) -> tuple[int, str]:
-    """More grades, then later grades, decide which copy of a duplicated verdict wins."""
+def _grading_progress(verdict: Verdict) -> tuple[int, float]:
+    """More grades, then later grades (compared as instants), decide which copy of a duplicated
+    verdict wins."""
     stamps = [verdict.adjudicated_at] + [f.adjudicated_at for r in verdict.reviews for f in r.findings]
     stamps += [r.human_review.reviewed_at for r in verdict.reviews if r.human_review]
     graded = (sum(1 for r in verdict.reviews for f in r.findings if f.adjudication)
               + sum(1 for r in verdict.reviews if r.human_review) + bool(verdict.human_verdict))
-    return graded, max((s.isoformat() for s in stamps if s), default="")
+    return graded, max((_when(s).timestamp() for s in stamps if s), default=float("-inf"))
 
 
 def load(directories: list[Path]) -> Loaded:
@@ -140,7 +141,15 @@ def load(directories: list[Path]) -> Loaded:
             if not directory.is_dir():
                 loaded.missing.append(str(directory))
                 continue
-            paths = sorted(p for p in directory.iterdir() if p.suffix == ".json" and p.is_file())
+            paths = []
+            for entry in sorted(directory.iterdir()):
+                if entry.suffix != ".json":
+                    continue
+                if entry.is_file():
+                    paths.append(entry)
+                else:
+                    loaded.unreadable += 1
+                    loaded.problems.append(f"{entry}: not a regular file")
         except OSError as exc:
             loaded.unreadable += 1
             loaded.problems.append(f"{directory}: directory not readable ({type(exc).__name__})")
@@ -148,7 +157,7 @@ def load(directories: list[Path]) -> Loaded:
         for path in paths:
             try:
                 verdict = Verdict.model_validate_json(path.read_text(encoding="utf-8"))
-            except (OSError, ValueError) as exc:
+            except (OSError, ValueError, RecursionError) as exc:
                 loaded.unreadable += 1
                 loaded.problems.append(f"{path}: not a readable verdict ({type(exc).__name__})")
                 continue
@@ -175,7 +184,7 @@ def load(directories: list[Path]) -> Loaded:
                 continue
             try:
                 event = json.loads(line)
-            except ValueError:
+            except (ValueError, RecursionError):
                 loaded.unreadable += 1
                 loaded.problems.append(f"{log_path}:{number}: not JSON; adjudicate cannot publish history "
                                        "in this directory until the line is repaired")
@@ -235,7 +244,7 @@ def contested(verdict: Verdict, review: Review, finding: Finding) -> str | None:
     outcome = "verified" if verdict.local_guard_applied else verdict.status
     if outcome == "verified" and vote == "revise":
         return "voted revise; the panel verified"
-    if finding.severity == "blocking" and outcome == "needs_revision" and verdict.up > verdict.down:
+    if finding.severity == "blocking" and outcome in ("needs_revision", "blocked") and verdict.up > verdict.down:
         return "blocking finding changed the outcome"
     if outcome in ("needs_revision", "blocked") and vote == "approve":
         return "voted approve; the panel revised"
@@ -251,23 +260,33 @@ def _judge_ref(verdict: Verdict, review: Review) -> str:
     return review.review_id
 
 
-_SHELL_SAFE = re.compile(r"^[A-Za-z0-9_./:+=-]+$")
-NO_COMMAND = "(no command printed: an identifier contains control characters; use --json)"
+_SHELL_SAFE = re.compile(r"^[A-Za-z0-9_./:+=-]+\Z")
+_SHELL_SAFE_NT = re.compile(r"^[A-Za-z0-9_./:+=\\-]+\Z")
+# PowerShell also reads the typographic quotes U+2018..U+201E as quotes, and cmd.exe has no quoting
+# at all, so a value carrying these (or cmd.exe metacharacters, on Windows) is never printed.
+_NEVER_PRINT = re.compile(r"[\u2018-\u201e]")
+_NEVER_PRINT_NT = re.compile(r'[\u2018-\u201e&|^%<>!"]')
+FLAGS = {"--dir", "--judge", "--finding", "--producer-verdict", "--verdict"}
+NO_COMMAND = "(no command printed: an identifier contains characters that cannot be quoted safely; use --json)"
 
 
 def _shell(value: str) -> str:
     """One command argument as a shell reads it: bare when it needs no quoting, otherwise quoted
     for POSIX shells, or for PowerShell on Windows."""
-    if _SHELL_SAFE.match(value):
-        return value
     if os.name == "nt":
-        return "'" + value.replace("'", "''") + "'"
-    return shlex.quote(value)
+        return value if _SHELL_SAFE_NT.match(value) else "'" + value.replace("'", "''") + "'"
+    return value if _SHELL_SAFE.match(value) else shlex.quote(value)
+
+
+def _printable(part: str) -> bool:
+    never = _NEVER_PRINT_NT if os.name == "nt" else _NEVER_PRINT
+    return (escape_controls(part) == part and not never.search(part)
+            and not (part.startswith("-") and part not in FLAGS))
 
 
 def _command(*parts: str) -> str | None:
     """A pasteable `agentjury adjudicate` line, or None when a value cannot be printed as typed."""
-    if any(escape_controls(part) != part for part in parts):
+    if not all(_printable(part) for part in parts):
         return None
     return "agentjury adjudicate " + " ".join(_shell(part) for part in parts)
 
@@ -281,8 +300,9 @@ def _when(value: datetime) -> datetime:
     return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
 
 
-def _header(path: Path, verdict: Verdict) -> dict[str, Any]:
+def _header(path: Path, verdict: Verdict, ref: str) -> dict[str, Any]:
     return {"run_id": verdict.run_id, "request_id": verdict.request_id, "directory": str(path.parent),
+            "path": str(path), "ref": ref,
             "created_at": verdict.created_at, "status": verdict.status, "up": verdict.up, "down": verdict.down,
             "confidence": verdict.confidence, "task_type": verdict.task_type,
             "pending_events": len(verdict.pending_adjudication_events)}
@@ -312,7 +332,14 @@ def pending(loaded: Loaded, *, only_contested: bool = False, task_type: str | No
     or a reviewer grade (spread across confidence bands). Filters narrow both queues."""
     findings_groups = []
     producer_groups = []
+    stems: dict[Path, list[str]] = {}
+    for path, _ in loaded.verdicts:
+        stems.setdefault(path.parent, []).append(path.stem)
     for path, verdict in loaded.verdicts:
+        # `agentjury adjudicate` finds a verdict by its run ID in the file name; a renamed file is
+        # named by its path instead, so the printed command still resolves.
+        by_id = verdict.run_id in path.stem and sum(1 for s in stems[path.parent] if verdict.run_id in s) == 1
+        ref = verdict.run_id if by_id else str(path)
         if task_type is not None and (verdict.task_type or "(none)") != task_type:
             continue
         if status is not None and verdict.status != status:
@@ -327,16 +354,16 @@ def pending(loaded: Loaded, *, only_contested: bool = False, task_type: str | No
                               "severity": finding.severity, "text": finding.text,
                               "contested": contested(verdict, review, finding)})
         ungraded_reviews = [{"judge": r.judge, "judge_ref": _judge_ref(verdict, r)}
-                            for r in verdict.reviews if r.human_review is None and _vote(r) != "abstain"]
+                            for r in verdict.reviews if r.human_review is None]
         if only_contested:
             items = [i for i in items if i["contested"]]
         if items:
-            findings_groups.append({**_header(path, verdict), "findings": items,
+            findings_groups.append({**_header(path, verdict, ref), "findings": items,
                                     "contested": any(i["contested"] for i in items),
                                     "severity_rank": min(SEVERITY_RANK.get(i["severity"], 3) for i in items)})
         needs_producer_grade = verdict.human_verdict is None
-        if (needs_producer_grade or ungraded_reviews) and not only_contested:
-            producer_groups.append({**_header(path, verdict), "band": _band(verdict.confidence),
+        if needs_producer_grade or ungraded_reviews:
+            producer_groups.append({**_header(path, verdict, ref), "band": _band(verdict.confidence),
                                     "needs_producer_grade": needs_producer_grade,
                                     "reviews_without_grade": ungraded_reviews})
     findings_groups.sort(key=lambda g: (0 if g["contested"] else 1, g["severity_rank"],
@@ -352,7 +379,8 @@ def pending(loaded: Loaded, *, only_contested: bool = False, task_type: str | No
             "verdicts_without_producer_grade": sum(1 for g in producer_groups if g["needs_producer_grade"]),
             "reviews_without_grade": sum(len(g["reviews_without_grade"]) for g in producer_groups),
         },
-        "findings": findings_groups, "producer": producer_groups,
+        # The counts above are the whole backlog even when --contested hides the second queue.
+        "findings": findings_groups, "producer": [] if only_contested else producer_groups,
     }
 
 
@@ -393,7 +421,7 @@ def pending_lines(result: dict[str, Any], loaded: Loaded, limit: int | None) -> 
             why = f"  ({item['contested']})" if item["contested"] else ""
             lines.append(f"  {escape_controls(item['judge'])}  finding {item['number']}  [{item['severity']}]  "
                          f"{escape_controls(item['text'])}{why}")
-            lines.append(_command_line(_command(group["run_id"], "--dir", group["directory"], "--judge",
+            lines.append(_command_line(_command(group["ref"], "--dir", group["directory"], "--judge",
                                                 item["judge_ref"], "--finding", str(item["number"]), "LABEL")))
     if len(shown) < len(result["findings"]):
         lines += ["", f"{len(result['findings']) - len(shown)} more verdicts with ungraded findings not shown; "
@@ -407,12 +435,12 @@ def pending_lines(result: dict[str, Any], loaded: Loaded, limit: int | None) -> 
     for group in shown:
         lines += ["", _group_line(group, f"  [band {group['band']}]"), *_events_note(group)]
         if group["needs_producer_grade"]:
-            lines.append(_command_line(_command(group["run_id"], "--dir", group["directory"],
+            lines.append(_command_line(_command(group["ref"], "--dir", group["directory"],
                                                 "--producer-verdict", "GRADE")))
         if group["reviews_without_grade"]:
             names = ", ".join(escape_controls(r["judge"]) for r in group["reviews_without_grade"])
             lines.append(f"  reviews without an overall grade: {names}")
-            lines.append(_command_line(_command(group["run_id"], "--dir", group["directory"], "--judge",
+            lines.append(_command_line(_command(group["ref"], "--dir", group["directory"], "--judge",
                                                 group["reviews_without_grade"][0]["judge_ref"], "--verdict", "VIEW")))
     if len(shown) < len(result["producer"]):
         lines += ["", f"{len(result['producer']) - len(shown)} more verdicts without a producer or reviewer grade "
@@ -452,8 +480,11 @@ def _json_default(value: Any) -> Any:
 def _param_value(key: str, value: Any) -> Any:
     shape = PARAM_SHAPES[key]
     if isinstance(shape, tuple):
-        ok = isinstance(value, shape) and not isinstance(value, bool) and math.isfinite(value)
-        return value if ok else None
+        if not isinstance(value, shape) or isinstance(value, bool):
+            return None
+        if isinstance(value, int):  # keep integers every JSON reader represents exactly
+            return value if abs(value) < 2**53 else None
+        return value if math.isfinite(value) else None
     return value if isinstance(value, str) and shape.match(value) else None
 
 
@@ -642,8 +673,8 @@ def cmd_export(args: argparse.Namespace) -> int:
         return EXIT_INVALID
     offending = audit_export(serialised)
     if offending:
-        print("Export refused: a value outside the allowlist was found at " + ", ".join(offending[:10]),
-              file=sys.stderr)
+        print("Export refused: a value outside the allowlist was found at "
+              + ", ".join(escape_controls(p) for p in offending[:10]), file=sys.stderr)
         return EXIT_INVALID
     text = json.dumps(serialised, indent=2, ensure_ascii=True, allow_nan=False) + "\n"
     if args.out:
@@ -696,6 +727,16 @@ def _add_review(bucket: dict[str, int], review: dict[str, Any], human_verdict: s
             bucket["agreements"] += 1
 
 
+def _shown_params(params: dict[str, Any]) -> dict[str, Any]:
+    """The parameters the stats listing shows, each kept only in its allowlisted shape."""
+    shown = {}
+    for key in ("timeout", "effort", "thinking", "max_tokens"):
+        value = _param_value(key, params[key]) if key in params else None
+        if value is not None:
+            shown[key] = value
+    return shown
+
+
 def stats(document: dict[str, Any]) -> dict[str, Any]:
     """Descriptive counts per reviewer configuration and task type from an export document."""
     configs: dict[str, dict[str, Any]] = {}
@@ -730,7 +771,7 @@ def stats(document: dict[str, Any]) -> dict[str, Any]:
                 "config_id": config_id, "judge": review.get("judge"), "role": review.get("role"),
                 "provider": review.get("provider"), "model": review.get("model"),
                 "rubric_version": review.get("rubric_version"), "prompt_hash": review.get("prompt_hash"),
-                "params": {k: params[k] for k in ("timeout", "effort", "thinking", "max_tokens") if k in params},
+                "params": _shown_params(params),
                 "all": _bucket(), "task_types": {},
             })
             _add_review(entry["all"], review, human)
@@ -813,13 +854,14 @@ def _well_formed(document: Any) -> str | None:
                 return "Not a well-formed export: a review has the wrong shape."
     offending = audit_export(document)
     if offending:
-        return "Not a well-formed export: unexpected value at " + ", ".join(offending[:10])
+        return ("Not a well-formed export: unexpected value at "
+                + ", ".join(escape_controls(p) for p in offending[:10]))
     return None
 
 
 def _render_stats(result: dict[str, Any], as_json: bool) -> str:
     if as_json:
-        return json.dumps({**result, "disclaimer": DISCLAIMER}, indent=2, ensure_ascii=True)
+        return json.dumps({**result, "disclaimer": DISCLAIMER}, indent=2, ensure_ascii=True, allow_nan=False)
     return "\n".join(stats_lines(result))
 
 
@@ -828,7 +870,7 @@ def cmd_stats(args: argparse.Namespace) -> int:
         try:
             text = sys.stdin.read() if args.source == "-" else Path(args.source).read_text(encoding="utf-8")
             document = json.loads(text)
-        except (OSError, ValueError):
+        except (OSError, ValueError, RecursionError):
             print("Cannot read the export file as JSON.", file=sys.stderr)
             return EXIT_INVALID
         problem = _well_formed(document)

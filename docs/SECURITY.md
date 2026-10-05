@@ -149,7 +149,7 @@ of keys it can contain. Per verdict it carries identities (`run_id`,
 `request_id`, `panel_id`), schema version, timestamps, task type, domain,
 producer framework, provider and model, the vote counts, score, consensus,
 diversity, confidence, status, local-check rule IDs, failed reviewers by name
-and exception class (read from the panel's `name: class: message` layout; an
+and exception class (read from the panel's `name: Class: message` layout; an
 error string in any other layout exports as nulls), artifact coverage counts
 and the producer grade. Per
 review: `review_id`, `config_id`, judge, role, provider, model, observed
@@ -166,9 +166,10 @@ reviewer reasons, error messages, notes, artifact names, file paths,
 `producer.agent`, adjudicator identity, response IDs or other parameters. An
 identity string with an unexpected shape is replaced by a stable digest and
 counted; any other string outside the allowlist refuses the export with the
-offending path. Judge, model, task-type, domain and producer labels are
-operator-chosen free text, and local model identifiers can name a path, so the
-command prints every distinct label that leaves for review before sharing.
+offending path. Judge, role, model, observed-model, requested-model,
+task-type, domain and producer labels are operator-chosen free text, and local
+model identifiers can name a path, so the command prints every distinct label
+that leaves for review before sharing.
 `endpoint_hash` is an unsalted hash of the endpoint URL: it confirms a guessed
 endpoint but does not reveal one, and the same value is part of `config_id`.
 Dropping adjudicator identity means grader disagreement cannot be measured
@@ -176,8 +177,10 @@ from an export. The `adjudication` commands read verdict directories and
 modify nothing; corrupt records are skipped and named on standard error, and a
 received export that is malformed is refused rather than counted. Printed
 grading commands quote directory and identifier values for the shell (POSIX
-quoting, or PowerShell quoting on Windows); a record whose identifiers contain
-control characters gets a note instead of a command.
+quoting, or PowerShell quoting on Windows, where cmd.exe is not a target); a
+record whose identifiers contain control characters, typographic quotes or,
+on Windows, cmd.exe metacharacters gets a note instead of a command. A verdict
+whose file name does not carry its run ID is named by its path.
 
 ## Human adjudication
 
