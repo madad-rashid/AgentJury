@@ -392,6 +392,8 @@ def test_load_names_malformed_logs_and_unreadable_directories(workspace, capsys,
     assert payload["unreadable"] == 2 and len(payload["problems"]) == 2
     assert "adjudications.jsonl:1: not an adjudication event" in captured.err
     assert "adjudications.jsonl:2: not an adjudication event" in captured.err
+    assert main(["adjudication", "pending"]) == 0
+    assert "Skipped 2 unreadable and 0 duplicate records; 0 events refer to verdicts not read." in capsys.readouterr().out
     (directory / "adjudications.jsonl").write_bytes(b'\xff\xfe{"event_id": "e3"}\n')
     assert main(["adjudication", "export"]) == 0
     captured = capsys.readouterr()
