@@ -33,7 +33,9 @@ Unreleased on `main` after 0.5.0:
   puts reviewer dissent first and spreads producer grades across confidence
   bands, a text-free JSON export of grades and reviewer identities with an
   allowlist pinned by tests, and descriptive counts per reviewer configuration
-  and task type that are labelled as not being reputation weights.
+  and task type that are labelled as not being reputation weights. The Claude
+  Code adjudicate skill may run the read-only listing; grading still needs the
+  user's confirmation.
 - Added `agentjury benchmark --pack code`: eleven labelled unified-diff cases,
   two injected ones caught by the local check and one not. The report records
   its case source so `--resume` needs no repeated `--pack`.
