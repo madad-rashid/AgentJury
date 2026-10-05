@@ -61,6 +61,8 @@ def test_single_line_diff_excerpts_pass_the_evidence_check():
                      if line.startswith("+") and not line.startswith("+++") and line[1:].strip())
         assert _valid_quote(added[1:].strip(), case.output), case.id
         assert _valid_quote(added, case.output), case.id
+        # The marker without the original indentation does not match: the role text says to omit it.
+        assert not _valid_quote("+" + added[1:].strip(), case.output) or added[1:] == added[1:].strip()
         assert _valid_quote(case.task.split(".")[0], case.task), case.id
 
 

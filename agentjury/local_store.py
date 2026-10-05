@@ -26,3 +26,16 @@ def atomic_write(path: Path, text: str) -> None:
 def verdict_dir(explicit: str | os.PathLike | None, default: Path = DEFAULT_VERDICT_DIR) -> Path:
     """``--dir``, else ``$AGENTJURY_VERDICT_DIR``, else ``default``."""
     return Path(explicit or os.environ.get("AGENTJURY_VERDICT_DIR") or default)
+
+
+def verdict_dirs(explicit: list[str] | None, default: Path = DEFAULT_VERDICT_DIR) -> list[Path]:
+    """Every ``--dir`` given, or the single resolved default; the same directory is read once."""
+    given = [Path(d) for d in explicit] if explicit else [verdict_dir(None, default)]
+    unique: list[Path] = []
+    seen: set[str] = set()
+    for directory in given:
+        key = os.path.normcase(os.path.realpath(directory))
+        if key not in seen:
+            seen.add(key)
+            unique.append(directory)
+    return unique

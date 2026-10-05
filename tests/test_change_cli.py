@@ -9,19 +9,11 @@ import pytest
 from agentjury import Panel, ReviewRequest, Verdict, aggregate, change_review, cli
 from agentjury.change_secrets import secret_env_values
 from agentjury.cli import main
-from agentjury.judges import ROLES, FakeJudge, register_roles
+from agentjury.judges import FakeJudge, register_roles
 from agentjury.judges.base import build_user_prompt
 
 GITHUB = "ghp" + "_" + "a1B2" * 9
 TASK = "Make add() return the sum of its arguments."
-
-
-@pytest.fixture(autouse=True)
-def restore_roles():
-    saved = dict(ROLES)
-    yield
-    ROLES.clear()
-    ROLES.update(saved)
 
 
 class Jury:

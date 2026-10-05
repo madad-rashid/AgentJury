@@ -300,7 +300,7 @@ def cmd_roles(args: argparse.Namespace) -> int:
     if args.roles:
         load_roles(args.roles)
     for name, desc in ROLES.items():
-        print(f"{name:<10} {desc}")
+        print(f"{name:<12} {desc}")
     return 0
 
 
@@ -310,12 +310,25 @@ def cmd_schema(args: argparse.Namespace) -> int:
     return 0
 
 
+def _resumed_pack(args: argparse.Namespace) -> str:
+    """The pack a resumed report was made from, when neither --pack nor --cases is given."""
+    if args.resume and not args.cases:
+        try:
+            source = json.loads(args.resume.read_text(encoding="utf-8")).get("source")
+        except (OSError, ValueError, AttributeError):
+            source = None
+        if isinstance(source, str) and source.startswith("pack:") and source[5:] in benchmark_cases.PACKS:
+            return source[5:]
+    return "starter"
+
+
 def cmd_benchmark(args: argparse.Namespace) -> int:
     if args.retry_errors and not args.resume:
         print("Benchmark configuration error: --retry-errors requires --resume.", file=sys.stderr)
         return 5
     try:
-        cases, pack_hash = load_cases(args.cases, pack=args.pack)
+        pack = args.pack or _resumed_pack(args)
+        cases, pack_hash = load_cases(args.cases, pack=pack)
         try:
             candidates = benchmark.prepare(cases, args.panel)
         except (ValueError, ImportError) as exc:
@@ -339,6 +352,7 @@ def cmd_benchmark(args: argparse.Namespace) -> int:
         report = benchmark.run(
             cases, pack_hash, candidates, report_path=report_path,
             max_calls=args.max_calls, resume=bool(args.resume), retry_errors=args.retry_errors,
+            source=f"cases:{args.cases.name}" if args.cases else f"pack:{pack}",
             progress=None if args.json else print,
             on_snapshot=lambda snapshot: score(snapshot, cases, candidates),
         )
@@ -485,8 +499,9 @@ def main(argv: list[str] | None = None) -> int:
     b = sub.add_parser("benchmark", help="Compare explicit panels on labeled cases.")
     source = b.add_mutually_exclusive_group()
     source.add_argument("--cases", type=Path, help="UTF-8 JSON case file (default: built-in starter cases).")
-    source.add_argument("--pack", choices=sorted(benchmark_cases.PACKS), default="starter",
-                        help="Built-in case pack: starter (short answers) or code (unified diffs).")
+    source.add_argument("--pack", choices=sorted(benchmark_cases.PACKS),
+                        help="Built-in case pack: starter (short answers, the default) or code (unified diffs). "
+                             "A resumed report remembers its pack.")
     b.add_argument("--panel", action="append", required=True,
                    help="Candidate panel in the same syntax as review; repeat to compare.")
     b.add_argument("--max-calls", type=int, default=20,
