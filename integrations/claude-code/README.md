@@ -22,14 +22,14 @@ blocking rules, and the same human adjudication.
    Code uses. A tool installer keeps it isolated from your project:
 
    ```bash
-   uv tool install "agentjury[all] @ git+https://github.com/madad-rashid/AgentJury"
+   uv tool install "agentjury[all]>=0.5.1,<0.6"
    # or
-   pipx install "git+https://github.com/madad-rashid/AgentJury"
+   pipx install "agentjury>=0.5.1,<0.6"
    pipx inject agentjury openai anthropic
    ```
 
-   `agentjury change` is not in the published 0.5.0 package; until the next
-   release, install from `main` as above. Check with `agentjury change --help`.
+   `agentjury change` needs 0.5.1 or later; 0.5.0 does not have it. Check with
+   `agentjury change --help`.
 2. Set provider keys for the default panel (`OPENAI_API_KEY`,
    `ANTHROPIC_API_KEY`) in the environment Claude Code starts from, or choose
    another panel below. Do not keep keys in files you review.
@@ -107,8 +107,9 @@ edit to a reviewed file.
 ## Limits
 
 - `verified` means this panel approved the supplied diff. Reviewers cannot run
-  your code, and no benchmark yet measures reviewer accuracy on code. The
-  confidence index is a heuristic, not a probability.
+  your code, and the only benchmark for these roles is the small synthetic
+  `agentjury benchmark --pack code`, which is not evidence of accuracy on real
+  changes. The confidence index is a heuristic, not a probability.
 - The send guard matches command text. It prevents accidental or unrequested
   sends by Claude; it is not a barrier against deliberate evasion. It also
   blocks harmless commands that contain the text `agentjury change send `, such

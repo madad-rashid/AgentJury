@@ -1,5 +1,5 @@
 name: agentjury
-version: 0.1.0
+version: 0.1.1
 manifest_version: 2
 api_version: 1
 description: Peer-review substantial Hermes responses with blind AI reviewers (AgentJury).

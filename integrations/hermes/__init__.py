@@ -22,7 +22,8 @@ def register(ctx):
         import agentjury  # noqa: F401
     except ImportError:
         log.error("agentjury plugin: the agentjury package is not installed in Hermes's Python. "
-                  "Run: pip install git+https://github.com/madad-rashid/AgentJury")
+                  "Run: <hermes-python> -m pip install \"agentjury[all]>=0.5.0,<0.6\" "
+                  "(see integrations/hermes/README.md).")
         return
 
     from .jury import Jury, Settings

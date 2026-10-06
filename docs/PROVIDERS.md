@@ -1,7 +1,7 @@
 # Provider routes
 
-This guide describes the provider implementation in the published 0.5.0 public
-alpha, not the older 0.4.4 package. See [migration](MIGRATION.md) for
+This guide describes the provider implementation in the published 0.5 public
+alpha series, not the older 0.4.4 package. See [migration](MIGRATION.md) for
 installation and upgrade guidance.
 Panel syntax is `role:provider[:model]`, shared by the CLI and Hermes. Empty
 entries and a trailing comma are tolerated; an empty panel is rejected.

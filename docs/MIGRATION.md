@@ -1,7 +1,9 @@
-# Migration to the 0.5.0 public alpha
+# Migration to the 0.5 public alpha series
 
-Version 0.5.0 is published on [PyPI](https://pypi.org/project/agentjury/0.5.0/).
-It includes schema/review policy 0.7 and the restored preset safeguard. The old
+Version 0.5.1 is the current release on [PyPI](https://pypi.org/project/agentjury/);
+0.5.0 introduced schema/review policy 0.7 and the restored preset safeguard, and
+0.5.1 adds code-change review and adjudication tooling (see the
+[0.5.1 section](#051-code-change-review-and-adjudication-tooling)). The old
 temporary Git pin `3023b96cadf7056076beb94e6dbbd9e3395858a8` reported historical
 version 0.4.4; the older PyPI 0.4.4 package lacks these changes.
 
@@ -10,20 +12,20 @@ version 0.4.4; the older PyPI 0.4.4 package lacks these changes.
 For a fresh environment, install:
 
 ```bash
-python -m pip install "agentjury[all]>=0.5.0,<0.6"
+python -m pip install "agentjury[all]>=0.5.1,<0.6"
 ```
 
-An existing Git/editable package reporting 0.5.0 can already satisfy this
+An existing Git/editable package reporting 0.5.1 can already satisfy this
 requirement without being replaced. To switch explicitly to the released wheel,
 reinstall only AgentJury, then ensure dependencies and SDKs are present:
 
 ```bash
-python -m pip install --force-reinstall --no-deps --index-url https://pypi.org/simple "agentjury==0.5.0"
-python -m pip install "agentjury[all]>=0.5.0,<0.6"
+python -m pip install --force-reinstall --no-deps --index-url https://pypi.org/simple "agentjury==0.5.1"
+python -m pip install "agentjury[all]>=0.5.1,<0.6"
 python -m pip check
 ```
 
-With `uv`, use `uv pip install --reinstall-package agentjury --python <target-python> "agentjury[all]>=0.5.0,<0.6"`.
+With `uv`, use `uv pip install --reinstall-package agentjury --python <target-python> "agentjury[all]>=0.5.1,<0.6"`.
 For Hermes, `<target-python>` is Hermes's interpreter, not an unrelated system
 Python. Restart Hermes after upgrading an already-loaded package.
 
@@ -33,7 +35,7 @@ Verify with that same interpreter:
 python -c "import agentjury, importlib.metadata as m; print(m.version('agentjury'), agentjury.__version__, agentjury.SCHEMA_VERSION); print(agentjury.__file__); print(m.distribution('agentjury').read_text('direct_url.json'))"
 ```
 
-For the exact 0.5.0 reinstall, expect `0.5.0 0.5.0 0.7`, an import path inside
+For the exact 0.5.1 reinstall, expect `0.5.1 0.5.1 0.7`, an import path inside
 the intended environment, and `None` for `direct_url.json`. Index-installed
 packages normally have no direct URL metadata; VCS/editable installs record their
 source there. Absence alone does not authenticate a package: use the explicit
@@ -86,8 +88,8 @@ every injected case blocked; earlier suggestions may no longer qualify.
 
 ## Hermes and human grading
 
-Install published core `agentjury>=0.5.0,<0.6` and the updated plugin folder
-separately. The manifest retains SDK dependencies for its default vendor panel.
+Install published core `agentjury>=0.5.0,<0.6` (0.5.1 or later for the
+`adjudication` commands) and the updated plugin folder separately. The manifest retains SDK dependencies for its default vendor panel.
 Use the installation and provenance checks above when replacing Git or editable
 installations; version/schema alone do not prove an environment switched to PyPI.
 
@@ -109,11 +111,11 @@ unavailable without a second model opinion. Only unreadable JSON retains a
 single retry. Existing evidence/quorum rules are unchanged. Start new benchmark
 runs with the new identities; an old run cannot silently resume under policy 0.7.
 
-## Unreleased on `main`: code-change review
+## 0.5.1: code-change review and adjudication tooling
 
 `agentjury change` (candidates, prepare, send, status) and the Claude Code
-plugin in `integrations/claude-code/` are additions on `main`; the published
-0.5.0 package does not contain them. No schema, rubric, aggregation or
+plugin in `integrations/claude-code/` are new in 0.5.1; the 0.5.0 package does
+not contain them. No schema, rubric, aggregation or
 existing command behavior changes. Change-review verdicts are schema 0.7
 verdicts whose existing `artifact_coverage` lists each selected path with its
 working-tree SHA-256 and `full` or `omitted` coverage. Snapshot records live in
@@ -124,7 +126,7 @@ package and schema versions. The packaged `correctness`, `security` and `tests`
 roles are new reviewer configurations; do not merge their history with other
 roles.
 
-Also on `main`: `agentjury adjudication pending|export|stats` (what to grade,
+Also new in 0.5.1: `agentjury adjudication pending|export|stats` (what to grade,
 a text-free grade export, descriptive counts; `export` and `stats` exit 5 on
 invalid input), `agentjury benchmark --pack code` with a report that remembers
 its pack on `--resume`, and the three code roles as built-ins, so
