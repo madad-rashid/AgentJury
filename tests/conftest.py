@@ -40,6 +40,16 @@ def offline_network_guard(monkeypatch):
     monkeypatch.setattr(socket, "getaddrinfo", test_resolve)
 
 
+@pytest.fixture(autouse=True)
+def restore_roles():
+    """Role registration is global; a test that registers roles must not change other tests' judges."""
+    from agentjury.judges import ROLES
+    saved = dict(ROLES)
+    yield
+    ROLES.clear()
+    ROLES.update(saved)
+
+
 class GitRepo:
     """A throwaway repository with exact file bytes and no user or system Git config."""
 

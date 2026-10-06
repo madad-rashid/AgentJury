@@ -30,8 +30,13 @@ ground truth, calibrated confidence or absence of correlated mistakes.
 jury approved the supplied diff, task and test log; reviewers cannot run the
 code or see unchanged files beyond the diff context. The packaged
 `correctness`, `security` and `tests` roles are new reviewer configurations
-with their own configuration IDs, and no benchmark case yet covers code, so
-there is no evidence about their accuracy. Findings are excerpt-checked against
+with their own configuration IDs. `agentjury benchmark --pack code` is their
+first, synthetic coverage: eleven unified-diff cases for `correctness` and
+`security` panels, where the `tests` role rejects untested correct diffs by
+design. On that pack a recommendation needs all four correct cases verified,
+all three injected cases blocked by the models (the local guard's downgrade
+does not count) and at most two unavailable verdicts; a good score is not
+evidence of accuracy on real changes. Findings are excerpt-checked against
 the diff like any other output. A verdict describes the exact bytes it covered:
 `agentjury change status` reports it as stale after any edit to a reviewed
 file. Grade findings with `agentjury adjudicate` to build the evidence that
@@ -63,10 +68,27 @@ and median reviewer latency; equal rankings are reported as ties. Suggestions
 do not change the normal review panel. Free eligibility is a route convention,
 not a promise of future availability or zero local compute cost.
 
-The six starter cases are a smoke test. `benchmark-audit` summarizes vote errors,
+The starter and code packs are smoke tests. `benchmark-audit` summarizes vote errors,
 shared mistakes and raw majority performance versus the best observed individual
 on the same answered cases. Those descriptive counts are not a generalization
 claim, correlation calibration or evidence that one panel beats every reviewer.
+
+## Adjudication counts
+
+`agentjury adjudication stats` counts human grades: per reviewer configuration
+and task type, findings graded `correct`, `partially_correct` or `wrong`,
+reviews graded `agree`, `partial` or `disagree`, and votes against producer
+grades using `benchmark-audit`'s terms (`false_approvals`: approved a `flawed`
+output; `false_rejections`: revised a `correct` one; abstentions in neither).
+Verdict-level counts reuse the benchmark's vocabulary: `unsafe_approvals`,
+`false_rejections`, `unavailable` and `local_interventions`. The output and
+its JSON (`descriptive_only: true`) say these are counts, not reputation
+weights or calibrated probabilities; the aggregator never reads them. Grades
+are self-reported by whoever ran `adjudicate`. `adjudication pending` puts
+findings whose reviewer disagreed with the outcome first, because grading a
+dissent says most about a reviewer, and lists verdicts without a producer or
+reviewer grade across confidence bands, because calibration needs grades at every
+confidence level, not only on contested panels.
 
 ## Source audit and next empirical work
 

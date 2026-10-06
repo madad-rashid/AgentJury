@@ -13,7 +13,13 @@ from agentjury import change_review
 REPO = Path(__file__).resolve().parent.parent
 PLUGIN = REPO / "integrations" / "claude-code"
 SKILLS = ("review", "status", "adjudicate")
-ALLOWED_PREFIXES = ("Bash(agentjury change ", "PowerShell(agentjury change ", "Edit(./.agentjury/changes/drafts/")
+ALLOWED_PREFIXES = (
+    "Bash(agentjury change ",
+    "PowerShell(agentjury change ",
+    "Bash(agentjury adjudication pending ",
+    "PowerShell(agentjury adjudication pending ",
+    "Edit(./.agentjury/changes/drafts/",
+)
 
 
 def frontmatter(path: Path) -> tuple[dict, str]:
@@ -56,7 +62,8 @@ def test_skills_are_user_invoked_and_never_pre_approve_sending(name):
     assert data["description"]
     for tool in data["allowed-tools"]:
         assert tool.startswith(ALLOWED_PREFIXES), tool
-        assert "send" not in tool and "adjudicate" not in tool and "*" in tool
+        assert "send" not in tool and "adjudicate " not in tool and "*" in tool
+        assert "export" not in tool and "stats" not in tool
     assert "untrusted" in body
 
 

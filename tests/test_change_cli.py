@@ -9,19 +9,15 @@ import pytest
 from agentjury import Panel, ReviewRequest, Verdict, aggregate, change_review, cli
 from agentjury.change_secrets import secret_env_values
 from agentjury.cli import main
-from agentjury.judges import ROLES, FakeJudge, register_roles
+from agentjury.change_review import ChangeBundle
+from agentjury.change_snapshot import ChangeFile, ChangeSnapshot
+from agentjury.protocol import Finding, FindingEvidence, Review, Vote
+from datetime import datetime, timezone
+from agentjury.judges import FakeJudge, register_roles
 from agentjury.judges.base import build_user_prompt
 
 GITHUB = "ghp" + "_" + "a1B2" * 9
 TASK = "Make add() return the sum of its arguments."
-
-
-@pytest.fixture(autouse=True)
-def restore_roles():
-    saved = dict(ROLES)
-    yield
-    ROLES.clear()
-    ROLES.update(saved)
 
 
 class Jury:
@@ -461,3 +457,49 @@ def test_exit_codes_and_version(capsys):
         main(["--version"])
     assert stopped.value.code == 0
     assert re.fullmatch(r"agentjury \S+ \(schema 0\.7\)\n", capsys.readouterr().out)
+
+def golden_bundle():
+    diff1 = "diff --git a/app.py b/app.py\n--- a/app.py\n+++ b/app.py\n@@ -1,2 +1,2 @@\n import os\n-    return a + b\n+    return a - b\n"
+    diff2 = "diff --git a/b.py b/b.py\n--- a/b.py\n+++ b/b.py\n@@ -1,1 +1,2 @@\n import os\n+x = 1\n"
+    request = ReviewRequest(request_id="req000000001", task="Make add() add.", output=diff1 + diff2, task_type="code_change")
+    files = [ChangeFile(path="app.py", change="modified", tracked=True, reviewed=True, sha256="a" * 64, added=1,
+                        removed=1, diff_start=0, diff_end=len(diff1)),
+             ChangeFile(path="b.py", change="modified", tracked=True, reviewed=True, sha256="b" * 64, added=1,
+                        removed=0, diff_start=len(diff1), diff_end=len(diff1) + len(diff2)),
+             ChangeFile(path=".env", change="added", tracked=False, reviewed=False, reason="secret-bearing file name; not read")]
+    snapshot = ChangeSnapshot(base="HEAD", base_commit="c" * 40, head_commit=None, context_lines=5, files=files)
+    return ChangeBundle(agentjury_version="0", created_at=datetime(2026, 10, 5, tzinfo=timezone.utc), request=request,
+                        snapshot=snapshot, panel="p", quorum=2, roles={}, destinations=[], max_attempts=0,
+                        payload_digest="0" * 64)
+
+
+def golden_change_verdict(bundle):
+    def finding(text, quote, **extra):
+        return Finding(text=text, severity="major", evidence=FindingEvidence(
+            output_quote=quote, basis_source="task", basis_quote="Make add() add."), **extra)
+    critic = Review(judge="correctness/openai", role="correctness", provider="openai", model="m", vote=Vote.REVISE,
+                    score=3, reason="Reviewer requests revision: 3 findings with checked excerpts.",
+                    findings=[finding("Subtracts.", "return a - b", adjudication="wrong"),
+                              finding("Unused import.", "import os"),
+                              finding("Elsewhere.", "nowhere")],
+                    rubric_version="0.7", prompt_hash="p")
+    security = Review(judge="security/anthropic", role="security", provider="anthropic", model="m",
+                      vote=Vote.APPROVE, score=8, reason="Reviewer approved; no findings reported.",
+                      rubric_version="0.7", prompt_hash="p")
+    return aggregate(bundle.request, [critic, security], requested=2, requested_providers=2)
+
+
+def test_verdict_lines_golden_output():
+    """Pins the numbered format with a coverage note, a one-file hint, a several-files hint and a grade."""
+    bundle = golden_bundle()
+    assert "\n".join(change_review.verdict_lines(golden_change_verdict(bundle), bundle)) + "\n" == (
+    "\u25b21 \u25bc1  score 5.5  consensus 50%  diversity 100%  jury 2/2  needs_revision\n"
+    "jury confidence index 17%  (heuristic, not a probability)\n"
+    "Coverage: 2 files reviewed; 1 not sent: .env (secret-bearing file name; not read)\n"
+    "\n"
+    "\u25bc  3  correctness/openai     Reviewer requests revision: 3 findings with checked excerpts.  []\n"
+    "        1. [major] Subtracts.  (app.py) [excerpts checked] [graded wrong]\n"
+    "        2. [major] Unused import.  (several files) [excerpts checked]\n"
+    "        3. [major] Elsewhere. [excerpts checked]\n"
+    "\u25b2  8  security/anthropic     Reviewer approved; no findings reported.  []\n"
+)

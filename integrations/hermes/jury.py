@@ -13,7 +13,6 @@ Nothing here touches AgentJury's core. It only builds requests and consumes verd
 
 from __future__ import annotations
 
-import json
 import hashlib
 import logging
 import os
@@ -28,6 +27,7 @@ from uuid import uuid4
 from agentjury import Artifact, ArtifactCoverage, Panel, Producer, ReviewRequest, Verdict
 from agentjury import panel_config
 from agentjury.judges import load_roles
+from agentjury.reviewer_guard import escape_controls
 
 log = logging.getLogger("agentjury.hermes")
 
@@ -123,6 +123,8 @@ def content_digest(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+# Hermes keeps its own copy: the plugin folder is installed against the published
+# 0.5.0 core, which has no agentjury.local_store. tests/test_hermes_plugin.py pins the imports.
 def atomic_write(path: Path, text: str) -> None:
     temporary = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
     try:
@@ -189,18 +191,20 @@ def invalidate_annotation(path: Path) -> None:
         atomic_write(path, clean)
 
 
+# Separate from agentjury.display for the same 0.5.0 compatibility reason.
 def render_verdict(verdict: Verdict, files: list[str] | None = None) -> str:
     lines = [f"{verdict.render()}   run {verdict.run_id}",
              f"jury confidence index {verdict.confidence:.0%}"]
     for r in verdict.reviews:
         arrow = {"approve": "▲", "revise": "▼", "abstain": "–"}[r.vote]
-        lines.append(f"{arrow} {r.score:.0f}  {r.judge}: {r.reason}")
+        # Model-written text must not reach the terminal unescaped.
+        lines.append(f"{arrow} {r.score:.0f}  {escape_controls(r.judge)}: {escape_controls(r.reason)}")
         for i, f in enumerate(r.findings, 1):
-            lines.append(f"      {i}. [{f.severity}] {f.text}")
+            lines.append(f"      {i}. [{f.severity}] {escape_controls(f.text)}")
     for e in verdict.errors:
-        lines.append(f"!  {e}")
+        lines.append(f"!  {escape_controls(e)}")
     for signal in verdict.local_signals:
-        lines.append(f"Local check [{signal.rule_id}]: {signal.excerpt}")
+        lines.append(f"Local check [{signal.rule_id}]: {escape_controls(signal.excerpt)}")
     for artifact in verdict.artifact_coverage:
         lines.append(f"artifact {artifact.name}: {artifact.coverage}; annotation {artifact.annotation_status}")
     if files:

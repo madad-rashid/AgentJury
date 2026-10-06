@@ -36,12 +36,17 @@ The normal test suite blocks network endpoints except ephemeral test servers.
 Keep `AGENTJURY_LIVE=0` for offline validation. Change-review tests create
 temporary Git repositories and need `git` on `PATH`; without it they are skipped. Native-route tests must mock the
 transport or use their test HTTP server; never assume an absent SDK prevents a
-native route from calling a local model.
+native route from calling a local model. Role registration is global, so an
+autouse fixture restores `ROLES` after every test; a test that needs a custom
+role registers it itself. A test pins the symbols `integrations/hermes` imports
+from the core to those published in 0.5.0, because the plugin folder is
+installed against that release.
 
 ## Benchmark cases and reports
 
 `agentjury benchmark --panel SPEC` uses the packaged
-`agentjury/data/starter.json` by default. Use `--cases FILE` for your own UTF-8
+`agentjury/data/starter.json` by default; `--pack code` selects the packaged
+unified-diff cases in `agentjury/data/code_cases.json`. Use `--cases FILE` for your own UTF-8
 JSON pack with `schema_version: "1"`, unique case IDs, nonempty `task` and
 `output`, optional `context`, and a `correct`, `flawed`, or `injected` label.
 The file supplies the expected category; the benchmark cannot infer the

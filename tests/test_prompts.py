@@ -38,9 +38,9 @@ def test_bad_role_name_rejected():
 
 def test_load_roles_from_file(tmp_path):
     f = tmp_path / "roles.json"
-    f.write_text(json.dumps({"tests": "You check test coverage."}), encoding="utf-8")
+    f.write_text(json.dumps({"coverage_expert": "You check test coverage."}), encoding="utf-8")
     load_roles(str(f))
-    assert ROLES["tests"] == "You check test coverage."
+    assert ROLES["coverage_expert"] == "You check test coverage."
 
 
 def test_unknown_role_still_rejected():

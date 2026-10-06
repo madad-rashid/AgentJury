@@ -9,7 +9,11 @@ a proof that prompt injection cannot work.
 The deterministic local guard detects selected explicit reviewer commands in
 the answer text. It can downgrade approval to `needs_revision`, but does not
 cast a vote or create a judge finding. It is not an exhaustive injection scanner
-and does not scan task/context/artifact text with those rules. The reviewer prompt
+and does not scan task/context/artifact text with those rules. Its cue words are
+`reviewer`, `judge` and `jury` and the phrases `grading rubric` and
+`rubric update`; plural forms such as `Reviewers:` do not match. Whitespace,
+including line breaks, is folded before matching, so a directive split across
+lines still matches when it is near a cue. The reviewer prompt
 still labels all those sections untrusted. Checked excerpts validate source
 provenance, not the truth or safety of the reviewer's interpretation.
 
@@ -136,6 +140,47 @@ Prepared and sent reviews, including the full diff that was sent, stay under
 reviewed files. The diff in `output` is subject to the local reviewer-command
 guard, so code that addresses reviewers, such as tests of this project, can
 become `needs_revision` with a visible warning.
+
+## Adjudication exports
+
+`agentjury adjudication export` is the one AgentJury artifact designed to be
+shared. It is built from an explicit allowlist, and a test pins the exact set
+of keys it can contain. Per verdict it carries identities (`run_id`,
+`request_id`, `panel_id`), schema version, timestamps, task type, domain,
+producer framework, provider and model, the vote counts, score, consensus,
+diversity, confidence, status, local-check rule IDs, failed reviewers by name
+and exception class (read from the panel's `name: Class: message` layout; an
+error string in any other layout exports as nulls), artifact coverage counts
+and the producer grade. Per
+review: `review_id`, `config_id`, judge, role, provider, model, observed
+model, vote, score, self-confidence, rubric version, prompt hash, allowlisted
+parameters (`route`, `transport`, `format`, `endpoint_hash`,
+`requested_model`, `completion_policy`, `timeout`, `max_tokens`, `effort`,
+`thinking`, each checked against an expected shape), latency, token counts
+and the review grade. Per finding: ID, severity, whether it had evidence, its
+basis source and its grade. Per adjudication event: IDs, kind, time, the judge
+name and the old and new labels.
+
+It never carries the task, output, context, artifacts, finding text, excerpts,
+reviewer reasons, error messages, notes, artifact names, file paths,
+`producer.agent`, adjudicator identity, response IDs or other parameters. An
+identity string with an unexpected shape is replaced by a stable digest and
+counted; any other string outside the allowlist refuses the export with the
+offending path. Judge, role, model, observed-model, requested-model,
+task-type, domain and producer labels are operator-chosen free text, and local
+model identifiers can name a path, so the command prints every distinct label
+that leaves for review before sharing.
+`endpoint_hash` is an unsalted hash of the endpoint URL: it confirms a guessed
+endpoint but does not reveal one, and the same value is part of `config_id`.
+Dropping adjudicator identity means grader disagreement cannot be measured
+from an export. The `adjudication` commands read verdict directories and
+modify nothing; corrupt records are skipped and named on standard error, and a
+received export that is malformed is refused rather than counted. Printed
+grading commands quote directory and identifier values for the shell (POSIX
+quoting, or PowerShell quoting on Windows, where cmd.exe is not a target); a
+record whose identifiers contain control characters, typographic quotes or,
+on Windows, cmd.exe metacharacters gets a note instead of a command. A verdict
+whose file name does not carry its run ID is named by its path.
 
 ## Human adjudication
 

@@ -180,7 +180,7 @@ def test_invalid_later_finding_leaves_verdict_and_log_unchanged(saved, second):
 def test_verdict_replace_failure_does_not_publish_audit(saved, monkeypatch):
     d, v = saved
     before = (d / v.filename).read_bytes()
-    monkeypatch.setattr(cli.os, "replace", lambda *a: (_ for _ in ()).throw(OSError("disk failure")))
+    monkeypatch.setattr("os.replace", lambda *a: (_ for _ in ()).throw(OSError("disk failure")))  # shared by local_store
     with pytest.raises(SystemExit, match="persist"):
         main(["adjudicate", v.run_id, "--dir", str(d), "--producer-verdict", "correct"])
     assert (d / v.filename).read_bytes() == before
@@ -205,3 +205,22 @@ def test_audit_failure_is_recoverable_without_duplicate_events(saved, monkeypatc
     history = events(d)
     assert [(e["old"], e["new"]) for e in history] == [(None, "correct"), ("correct", "flawed")]
     assert len({e["event_id"] for e in history}) == 2
+
+
+def test_review_saves_to_the_configured_verdict_directory(tmp_path, monkeypatch, capsys):
+    task = tmp_path / "task.md"
+    output = tmp_path / "output.md"
+    task.write_text("Check the answer.", encoding="utf-8")
+    output.write_text("The answer is 323.", encoding="utf-8")
+    monkeypatch.setattr(cli, "build_panel", lambda spec, quorum=None: Panel([FakeJudge("accuracy")]))
+    monkeypatch.chdir(tmp_path)
+
+    monkeypatch.setenv("AGENTJURY_VERDICT_DIR", str(tmp_path / "from-env"))
+    assert main(["review", str(task), str(output)]) == 0
+    assert len(list((tmp_path / "from-env").glob("*.json"))) == 1
+
+    assert main(["review", str(task), str(output), "--dir", str(tmp_path / "from-flag")]) == 0
+    assert len(list((tmp_path / "from-flag").glob("*.json"))) == 1
+    assert not (tmp_path / ".agentjury").exists()
+    assert main(["verdicts"]) == 0
+    assert "from-env" in capsys.readouterr().out

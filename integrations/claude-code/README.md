@@ -66,7 +66,10 @@ blocking rules, and the same human adjudication.
 
 `/agentjury:status [run-id]` shows a saved review and whether the reviewed code
 is unchanged. `/agentjury:adjudicate` records grades you state, through the
-existing `agentjury adjudicate` command.
+existing `agentjury adjudicate` command. Across runs,
+`agentjury adjudication pending` lists everything still ungraded with the
+commands to run, and `agentjury adjudication export` produces a shareable,
+text-free record of your grades.
 
 All three skills are user-invoked only (`disable-model-invocation: true`).
 

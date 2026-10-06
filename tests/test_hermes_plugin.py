@@ -213,7 +213,6 @@ def test_missing_response_is_skipped_not_crashed(plugin, tmp_path):
 
 def test_slow_older_turn_does_not_overwrite_newer_verdict(plugin, tmp_path):
     """Turn 1 is slow and votes revise; turn 2 is fast and approves. Latest must be turn 2."""
-    calls = {"n": 0}
 
     def factory(settings):
         return Panel([FakeJudge("accuracy", provider="openai"), FakeJudge("critic", provider="anthropic")])
@@ -225,7 +224,6 @@ def test_slow_older_turn_does_not_overwrite_newer_verdict(plugin, tmp_path):
                   FakeJudge("critic", provider="anthropic", vote="revise", score=4, delay=0.6)])
     fast = Panel([FakeJudge("accuracy", provider="openai"), FakeJudge("critic", provider="anthropic")])
     panels = iter([slow, fast])
-    original = jury._panel_factory
     jury._panel = None
 
     class Switching:
@@ -260,3 +258,31 @@ def test_legacy_frontmatter_key_is_replaced(plugin, tmp_path):
     jury.wait(10)
     text = note.read_text(encoding="utf-8")
     assert "agentjury_id:" not in text and text.count("agentjury_status") == 1 and "title: Old" in text
+
+
+def test_render_verdict_escapes_model_written_text(plugin):
+    from hermes_agentjury.jury import render_verdict
+
+    verdict = Panel([
+        FakeJudge("accuracy", provider="openai", reason="ok\x1b[2J", vote="revise", score=4,
+                  findings=[{"text": "Bad\x1b[31m", "severity": "minor"}]),
+        FakeJudge("critic", provider="anthropic", fail_times=5),
+    ]).review(__import__("agentjury").ReviewRequest(task="t", output="o"))
+    verdict.errors.append("critic/anthropic: RuntimeError: boom\x1b[0m")
+    shown = render_verdict(verdict, ["note.md"])
+    assert "\x1b" not in shown
+    assert "\\x1b[2J" in shown and "\\x1b[31m" in shown and "boom\\x1b[0m" in shown
+
+
+def test_hermes_imports_only_symbols_published_in_0_5_0():
+    import ast
+    allowed = {"Artifact", "ArtifactCoverage", "Panel", "Producer", "ReviewRequest", "Verdict", "panel_config",
+               "load_roles", "escape_controls", "agentjury"}
+    for name in ("jury.py", "__init__.py"):
+        tree = ast.parse((ROOT / name).read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module and node.module.startswith("agentjury"):
+                assert node.module.split(".")[1:2] in ([], ["judges"], ["reviewer_guard"], ["panel_config"]), node.module
+                assert {alias.name for alias in node.names} <= allowed, (name, node.module)
+            if isinstance(node, ast.Import):
+                assert {alias.name for alias in node.names if alias.name.startswith("agentjury")} <= allowed

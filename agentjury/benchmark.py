@@ -150,7 +150,7 @@ def run(
     cases: list[BenchmarkCase], pack_hash: str, candidates: list[Candidate], *,
     report_path: Path, max_calls: int = 20, resume: bool = False,
     retry_errors: bool = False, progress: Callable[[str], None] | None = None,
-    on_snapshot: Callable[[dict], dict] | None = None,
+    on_snapshot: Callable[[dict], dict] | None = None, source: str | None = None,
 ) -> dict:
     if max_calls <= 0:
         raise ValueError("--max-calls must be positive.")
@@ -187,7 +187,7 @@ def run(
         report = {
             "schema_version": "1", "created_at": _now(), "updated_at": _now(),
             "state": "partial", "pack_hash": pack_hash, "cases": case_rows,
-            "panels": panel_rows, "jobs": {}, "calls_total": 0,
+            "panels": panel_rows, "jobs": {}, "calls_total": 0, "source": source,
         }
     calls_this_run = 0
     for key, case, judge in jobs:
