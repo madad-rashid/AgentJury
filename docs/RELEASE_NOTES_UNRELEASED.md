@@ -1,4 +1,10 @@
-# AgentJury 0.5.0 - published release and repository follow-up
+# AgentJury release notes: unreleased changes
+
+Nothing is unreleased on `main` after 0.5.1. The 0.5.1 notes are in
+[RELEASE_NOTES_v0.5.1.md](RELEASE_NOTES_v0.5.1.md); add new entries above
+this line as changes land.
+
+## AgentJury 0.5.0 - published release and repository follow-up
 
 Version 0.5.0 was published to PyPI on 2026-10-03 from commit
 `8aa02e1c5e9dc96149c1b99a5dc66e96d5a6770b`. The
@@ -10,43 +16,6 @@ the temporary guarded Git pin. Install guidance describes explicit core
 reinstallation/provenance checks and separate plugin-folder installation.
 These documentation/manifest changes do not update an installed Hermes environment
 or the immutable PyPI README/sdist snapshot, and do not constitute another release.
-
-Unreleased on `main` after 0.5.0:
-
-- Added `agentjury change candidates|prepare|send|status` for explicit reviews of
-  a Git code change. `prepare` builds the diff of selected changed files, leaves
-  out secret-named files, symlinks, submodules, lockfiles and binary content,
-  refuses on a local secret-scan match, and writes a preview of the exact
-  payload and destinations without contacting any reviewer. `send` submits a
-  prepared review once, after checking a confirmation code, the reviewed file
-  bytes and the reviewer configuration. `status` reports whether the reviewed
-  files changed since. Verdicts use the unchanged aggregation and adjudication.
-- Added packaged `correctness`, `security` and `tests` reviewer roles for code
-  changes; they are new, unbenchmarked reviewer configurations.
-- Added the Claude Code plugin in `integrations/claude-code/` and a repository
-  marketplace. Its user-invoked skills prepare reviews, show status and record
-  user-stated grades; the user runs the send command, and a hook denies
-  Claude-initiated sends.
-- Added `agentjury --version`. No protocol schema, rubric or existing command
-  behavior changed.
-- Added `agentjury adjudication pending|export|stats`: a grading queue that
-  puts reviewer dissent first and spreads producer grades across confidence
-  bands, a text-free JSON export of grades and reviewer identities with an
-  allowlist pinned by tests, and descriptive counts per reviewer configuration
-  and task type that are labelled as not being reputation weights. The Claude
-  Code adjudicate skill may run the read-only listing; grading still needs the
-  user's confirmation.
-- Added `agentjury benchmark --pack code`: eleven labelled unified-diff cases,
-  two injected ones caught by the local check and one not. The report records
-  its case source so `--resume` needs no repeated `--pack`.
-- The `correctness`, `security` and `tests` roles are built in and listed by
-  `agentjury roles`; existing roles and configuration IDs are unchanged.
-- Verdict display, atomic writes and verdict-directory resolution are shared
-  between `review` and `change`; `review` saves atomically and shows grades.
-- `agentjury review` now saves to `--dir` or `AGENTJURY_VERDICT_DIR` like the
-  other verdict commands, and the CLI and Hermes `/jury` displays escape control
-  characters in reviewer names, reasons, findings and errors, as the change-review
-  display already did.
 
 The 0.5.0 release included:
 

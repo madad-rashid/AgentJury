@@ -1,7 +1,7 @@
 {
   "name": "agentjury",
   "displayName": "AgentJury",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Ask an AgentJury panel of independent AI reviewers to review selected code changes. You preview exactly what is sent and run the send command yourself.",
   "author": {
     "name": "Rashid Al-Derham"

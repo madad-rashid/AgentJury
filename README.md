@@ -35,12 +35,13 @@ Open an issue at <https://github.com/madad-rashid/AgentJury/issues>. Please do n
 
 ## Quick start
 
-Version 0.5.0 is published on [PyPI](https://pypi.org/project/agentjury/0.5.0/)
-with native providers, benchmarking, schema/review policy 0.7 and the provider
-safeguards. Install the public alpha:
+Version 0.5.1 is the current release on [PyPI](https://pypi.org/project/agentjury/),
+with native providers, benchmarking, schema/review policy 0.7, the provider
+safeguards, previewed code-change reviews and the adjudication tooling. Install
+the public alpha:
 
 ```bash
-python -m pip install "agentjury[all]>=0.5.0,<0.6"
+python -m pip install "agentjury[all]>=0.5.1,<0.6"
 ```
 
 Native-only applications can omit `[all]`. Existing Git or editable installations
@@ -97,7 +98,7 @@ retrieve the source or establish that its contents support the claim.
 
 ### One key or a local model
 
-OpenRouter and local-model support is included in the published 0.5.0 install
+OpenRouter and local-model support is included in the published install
 above. To work from a checkout of current `main` instead, install with
 `pip install -e ".[all]"`.
 [OpenRouter](https://openrouter.ai/docs/quickstart) needs one
@@ -159,9 +160,8 @@ shared training, infrastructure and correlated mistakes can remain.
 
 ## Review a code change
 
-`agentjury change` reviews a Git change on request. It is available on `main`
-after 0.5.0 and is not in the published 0.5.0 package. Preparing a review sends
-nothing:
+`agentjury change` reviews a Git change on request. It is included from
+0.5.1 on. Preparing a review sends nothing:
 
 ```bash
 agentjury change candidates
@@ -506,8 +506,8 @@ not prove interpretation. See [security limits](docs/SECURITY.md).
 - [x] Human finding-level adjudication and append-only adjudication history
 - [x] PyPI release
 - [x] OpenRouter, Ollama, and configurable OpenAI-compatible judge routes
-- [x] Claude Code integration: previewed, user-sent code-change reviews (on `main`, unreleased)
-- [x] Grading queue, text-free grade export and descriptive counts; code benchmark pack (on `main`, unreleased)
+- [x] Claude Code integration: previewed, user-sent code-change reviews (0.5.1)
+- [x] Grading queue, text-free grade export and descriptive counts; code benchmark pack (0.5.1)
 - [ ] Reviewer reputation by task type, weighted by human agreement over time
 - [ ] Jury diversity weighting from historical disagreement
 - [ ] Calibrated confidence from observed outcomes

@@ -106,7 +106,7 @@ Keep README installation instructions aligned with the released compatibility
 range. For the current 0.5 series:
 
 ```bash
-python -m pip install "agentjury[all]>=0.5.0,<0.6"
+python -m pip install "agentjury[all]>=0.5.1,<0.6"
 ```
 
 Then verify the exact newly published version in a fresh environment

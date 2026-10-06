@@ -29,9 +29,9 @@ The home directory is the one containing Hermes's `config.yaml` and `.env`
    `uv pip install --python <hermes-python> "agentjury[all]>=0.5.0,<0.6"`.
    When switching an existing Git/editable installation to PyPI, reinstall only
    AgentJury explicitly: `uv pip install --reinstall-package agentjury --python <hermes-python> "agentjury[all]>=0.5.0,<0.6"`,
-   or `<hermes-python> -m pip install --force-reinstall --no-deps --index-url https://pypi.org/simple "agentjury==0.5.0"`
+   or `<hermes-python> -m pip install --force-reinstall --no-deps --index-url https://pypi.org/simple "agentjury==0.5.1"`
    followed by the install command above for SDK/dependency requirements.
-   Verify version `0.5.0`, schema `0.7`, import location and provenance using the
+   Verify version `0.5.1`, schema `0.7`, import location and provenance using the
    [migration checks](../../docs/MIGRATION.md), then run `<hermes-python> -m pip check`.
    Restart Hermes after replacing a package already loaded by its process.
 2. Separately link or copy `integrations/hermes` from the updated `main` checkout
@@ -47,9 +47,10 @@ The home directory is the one containing Hermes's `config.yaml` and `.env`
 
 ## Configure
 
-This integration requires schema 0.7 and published AgentJury `>=0.5.0,<0.6`.
-The manifest also installs vendor SDKs for the default panel. PyPI 0.5.0 includes
-the preset safeguard; older PyPI 0.4.4 lacks the matching coverage fields.
+This integration requires schema 0.7 and published AgentJury `>=0.5.0,<0.6`;
+0.5.1 is the current release. The manifest also installs vendor SDKs for the
+default panel. PyPI 0.5.0 and later include the preset safeguard; older PyPI
+0.4.4 lacks the matching coverage fields.
 Native-only core routes do not themselves require either SDK.
 See [migration](../../docs/MIGRATION.md) and [providers](../../docs/PROVIDERS.md)
 for compatibility and installation provenance checks.
@@ -137,7 +138,7 @@ for sessions that mix unrelated tasks.
 
 Type `/jury` in any session to see the latest verdict, or `/jury <request_id>`
 for a saved one. Verdict JSON accumulates in `<HERMES_HOME>/plugin-data/agentjury/verdicts/`.
-From a checkout of `main` (the published 0.5.0 core lacks the command),
+With core 0.5.1 or later in Hermes's interpreter (0.5.0 lacks the command),
 `agentjury adjudication pending --dir <HERMES_HOME>/plugin-data/agentjury/verdicts`
 lists what still needs grading there, and `export` shares the grades without
 the reviewed text.

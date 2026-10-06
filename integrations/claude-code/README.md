@@ -22,14 +22,14 @@ blocking rules, and the same human adjudication.
    Code uses. A tool installer keeps it isolated from your project:
 
    ```bash
-   uv tool install "agentjury[all] @ git+https://github.com/madad-rashid/AgentJury"
+   uv tool install "agentjury[all]>=0.5.1,<0.6"
    # or
-   pipx install "git+https://github.com/madad-rashid/AgentJury"
+   pipx install "agentjury>=0.5.1,<0.6"
    pipx inject agentjury openai anthropic
    ```
 
-   `agentjury change` is not in the published 0.5.0 package; until the next
-   release, install from `main` as above. Check with `agentjury change --help`.
+   `agentjury change` needs 0.5.1 or later; 0.5.0 does not have it. Check with
+   `agentjury change --help`.
 2. Set provider keys for the default panel (`OPENAI_API_KEY`,
    `ANTHROPIC_API_KEY`) in the environment Claude Code starts from, or choose
    another panel below. Do not keep keys in files you review.

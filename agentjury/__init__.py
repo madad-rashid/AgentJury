@@ -15,7 +15,7 @@ from .protocol import (
     Vote,
 )
 
-__version__ = "0.5.0"
+__version__ = "0.5.1"
 
 __all__ = [
     "SCHEMA_VERSION", "Artifact", "ArtifactCoverage", "Finding", "HumanReview", "Producer",
