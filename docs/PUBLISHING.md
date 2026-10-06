@@ -4,6 +4,23 @@ This checklist keeps package identity, Git tags, GitHub Releases, and PyPI align
 
 ## Release history
 
+### 0.5.1
+
+Version 0.5.1 is published on [PyPI](https://pypi.org/project/agentjury/0.5.1/)
+and [GitHub](https://github.com/madad-rashid/AgentJury/releases/tag/v0.5.1)
+from commit `e48d0ff0225512961a4b5742451f77436d1d8fd0`, the merge of the
+release PR after all eight CI jobs passed. The GitHub Release created the
+`v0.5.1` tag on publication, and the release-triggered
+[publishing run](https://github.com/madad-rashid/AgentJury/actions/runs/37526913652)
+succeeded through the `pypi` environment and OIDC workflow with an explicit
+deployment approval. Checked afterwards: both artifact digests match the PyPI
+metadata, the wheel and sdist contents are identical to a fresh build of the
+tagged commit, a clean `pip install "agentjury[all]==0.5.1"` imports version
+0.5.1 with schema 0.7 and runs `agentjury --version`, `roles`, `change` and
+`adjudication`, `pip check` is clean, and the offline Hermes plugin tests pass
+against the installed wheel. This records that publication; it is not a claim
+about model accuracy.
+
 ### 0.5.0
 
 Version 0.5.0 is published on [PyPI](https://pypi.org/project/agentjury/0.5.0/)
