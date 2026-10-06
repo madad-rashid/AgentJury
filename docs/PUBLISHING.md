@@ -2,7 +2,9 @@
 
 This checklist keeps package identity, Git tags, GitHub Releases, and PyPI aligned.
 
-## Current release note
+## Release history
+
+### 0.5.0
 
 Version 0.5.0 is published on [PyPI](https://pypi.org/project/agentjury/0.5.0/)
 and [GitHub](https://github.com/madad-rashid/AgentJury/releases/tag/v0.5.0)
@@ -17,8 +19,8 @@ settings audits or general model accuracy.
 
 The normal route remains `.github/workflows/publish.yml`. Future releases require
 their own approval, unused version/tag checks, exact-commit tests and fresh builds.
-Do not reuse older validation artifacts, move `v0.5.0`, or upload that version
-again. Repository installation/manifest updates do not replace the published
+Do not reuse older validation artifacts, move an existing tag, or upload a
+published version again. Repository installation/manifest updates do not replace the published
 wheel, sdist or PyPI README snapshot; changing those requires a new patch release.
 
 ## One-time PyPI setup
@@ -83,15 +85,17 @@ same version manually and through the release-triggered workflow.
 ## GitHub tag and Release
 
 For a new, approved version only, after tests and package validation succeed
-(replace `<new-version>`; `v0.5.0` already exists):
+(replace `<new-version>`; `git tag -l` lists the tags that already exist):
 
 ```bash
 git tag -a "v<new-version>" -m "AgentJury v<new-version> public alpha"
 git push origin "v<new-version>"
 ```
 
-Create a GitHub Release from the new tag using finalized notes derived from
-`docs/RELEASE_NOTES_UNRELEASED.md`.
+Create a GitHub Release from the new tag using the finalized notes in
+`docs/RELEASE_NOTES_v<new-version>.md`. Entries accumulate in
+`docs/RELEASE_NOTES_UNRELEASED.md` between releases and move into that file
+when the version is prepared.
 
 Do not retag an existing version. If a release mistake is found after publication, increment the patch version.
 
@@ -122,6 +126,8 @@ agentjury roles
 - `agentjury roles` works from a fresh environment
 - GitHub Release points at the matching tag
 - package metadata and `agentjury.__version__` match the tag
+- the release history above gains the new version with its commit, tag and
+  publishing run
 
 ## Existing automation and publication transition
 

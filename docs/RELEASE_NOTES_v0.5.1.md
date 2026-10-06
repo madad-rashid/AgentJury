@@ -21,8 +21,9 @@ and adjudication history carries over.
   ungraded findings and record user-stated grades; the user runs the send
   command, and a hook denies Claude-initiated sends.
 - `correctness`, `security` and `tests` reviewer roles for code changes, built
-  in and listed by `agentjury roles`. They are new, lightly benchmarked
-  reviewer configurations.
+  in and listed by `agentjury roles`. They are new, unbenchmarked reviewer
+  configurations; `agentjury benchmark --pack code` is their first synthetic
+  coverage, aimed at `correctness` and `security` panels.
 - `agentjury adjudication pending|export|stats`: a grading queue that puts
   reviewer dissent first and spreads producer grades across confidence bands,
   with ready-to-edit `agentjury adjudicate` commands whose placeholders record
@@ -47,6 +48,10 @@ and adjudication history carries over.
   still runs against the 0.5.0 core.
 - A roles file that is not valid JSON or not an object of strings now exits
   with its message instead of a traceback.
+- The Hermes plugin manifest in `integrations/hermes/`, installed from a
+  checkout rather than from the wheel, depends on published
+  `agentjury>=0.5.0,<0.6` instead of a Git pin. Re-copy or relink the plugin
+  folder when upgrading.
 
 ## Runtime behavior
 

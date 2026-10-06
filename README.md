@@ -2,7 +2,7 @@
 
 [![tests](https://github.com/madad-rashid/AgentJury/actions/workflows/tests.yml/badge.svg)](https://github.com/madad-rashid/AgentJury/actions/workflows/tests.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/madad-rashid/AgentJury/blob/main/LICENSE)
 
 **Peer review for AI agents.**
 
@@ -46,12 +46,12 @@ python -m pip install "agentjury[all]>=0.5.1,<0.6"
 
 Native-only applications can omit `[all]`. Existing Git or editable installations
 may satisfy the same version requirement without switching to PyPI; follow the
-explicit reinstall and provenance checks in the [migration guide](docs/MIGRATION.md).
+explicit reinstall and provenance checks in the [migration guide](https://github.com/madad-rashid/AgentJury/blob/main/docs/MIGRATION.md).
 For Hermes, install the core into Hermes's Python and separately copy or link
 the updated `integrations/hermes` plugin folder from `main`. The core wheel
-does not install the plugin folder. See the [Hermes instructions](integrations/hermes/README.md),
-[provider guide](docs/PROVIDERS.md), [security boundaries](docs/SECURITY.md)
-and [evaluation guide](docs/EVALUATION.md).
+does not install the plugin folder. See the [Hermes instructions](https://github.com/madad-rashid/AgentJury/blob/main/integrations/hermes/README.md),
+[provider guide](https://github.com/madad-rashid/AgentJury/blob/main/docs/PROVIDERS.md), [security boundaries](https://github.com/madad-rashid/AgentJury/blob/main/docs/SECURITY.md)
+and [evaluation guide](https://github.com/madad-rashid/AgentJury/blob/main/docs/EVALUATION.md).
 
 Set `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` in your environment or a local `.env` file, then review an agent output:
 
@@ -187,7 +187,7 @@ unchanged (exit 0) or stale (exit 7). Refusals exit 6. The default panel is
 `correctness:openai,security:anthropic,tests:openai`; set
 `AGENTJURY_CHANGE_PANEL` or `--panel` to change it. Files with secret-bearing
 names, symlinks, lockfiles and binary files are never sent. See
-[security](docs/SECURITY.md#code-change-reviews).
+[security](https://github.com/madad-rashid/AgentJury/blob/main/docs/SECURITY.md#code-change-reviews).
 
 ## Compare free juries
 
@@ -400,7 +400,7 @@ them before sharing. `stats` prints descriptive counts per reviewer
 configuration and task type: graded findings by label, review grades, and
 votes against producer grades. They are counts of human grades, not
 reputation weights; nothing reads them to change a verdict. See
-[security](docs/SECURITY.md#adjudication-exports).
+[security](https://github.com/madad-rashid/AgentJury/blob/main/docs/SECURITY.md#adjudication-exports).
 
 Identity hierarchy:
 
@@ -436,7 +436,7 @@ agentjury review task.md output.md \
 `integrations/hermes/` contains the first live integration. It reviews substantial Hermes responses in the background, saves verdicts, writes verdict metadata into markdown frontmatter, and feeds major findings back once on the next session turn, without inferring task lineage.
 Disable feedback for unrelated tasks sharing a session.
 
-See [integrations/hermes/README.md](integrations/hermes/README.md) for installation and configuration.
+See [integrations/hermes/README.md](https://github.com/madad-rashid/AgentJury/blob/main/integrations/hermes/README.md) for installation and configuration.
 
 ### Claude Code
 
@@ -452,9 +452,9 @@ Nothing is reviewed automatically and verdicts trigger no edits.
 /plugin install agentjury@agentjury
 ```
 
-See [integrations/claude-code/README.md](integrations/claude-code/README.md).
+See [integrations/claude-code/README.md](https://github.com/madad-rashid/AgentJury/blob/main/integrations/claude-code/README.md).
 
-Adapters for other agent frameworks are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
+Adapters for other agent frameworks are welcome. See [CONTRIBUTING.md](https://github.com/madad-rashid/AgentJury/blob/main/CONTRIBUTING.md).
 
 ## Protocol
 
@@ -477,10 +477,10 @@ Every field needed by the planned reputation system is recorded from the first r
 
 ## Development
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup, tests, judge-provider adapters, framework integrations, and pull requests.
+See [CONTRIBUTING.md](https://github.com/madad-rashid/AgentJury/blob/main/CONTRIBUTING.md) for local setup, tests, judge-provider adapters, framework integrations, and pull requests.
 
-See [docs/PUBLISHING.md](docs/PUBLISHING.md) for the release and PyPI checklist.
-See [docs/REVIEW_INTEGRITY_VALIDATION.md](docs/REVIEW_INTEGRITY_VALIDATION.md)
+See [docs/PUBLISHING.md](https://github.com/madad-rashid/AgentJury/blob/main/docs/PUBLISHING.md) for the release and PyPI checklist.
+See [docs/REVIEW_INTEGRITY_VALIDATION.md](https://github.com/madad-rashid/AgentJury/blob/main/docs/REVIEW_INTEGRITY_VALIDATION.md)
 for exact input commits, regression results and the limits of this review.
 
 ## Status
@@ -491,7 +491,7 @@ The next research step is reviewer reputation by task type using human-adjudicat
 
 Injection defenses remain experimental: recorded local probes approved an
 injected artifact and falsely revised an inert quotation. Checked excerpts do
-not prove interpretation. See [security limits](docs/SECURITY.md).
+not prove interpretation. See [security limits](https://github.com/madad-rashid/AgentJury/blob/main/docs/SECURITY.md).
 
 ## Roadmap
 

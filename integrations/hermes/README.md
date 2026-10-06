@@ -24,11 +24,11 @@ The home directory is the one containing Hermes's `config.yaml` and `.env`
 (on Windows often `%LOCALAPPDATA%\hermes`, on Linux/macOS usually `~/.hermes`).
 
 1. Install published AgentJury and the judge SDKs into Hermes's Python:
-   `<hermes-python> -m pip install "agentjury[all]>=0.5.0,<0.6"`.
+   `<hermes-python> -m pip install --upgrade "agentjury[all]>=0.5.1,<0.6"`.
    If the venv was made by `uv`, use
-   `uv pip install --python <hermes-python> "agentjury[all]>=0.5.0,<0.6"`.
+   `uv pip install --upgrade --python <hermes-python> "agentjury[all]>=0.5.1,<0.6"`.
    When switching an existing Git/editable installation to PyPI, reinstall only
-   AgentJury explicitly: `uv pip install --reinstall-package agentjury --python <hermes-python> "agentjury[all]>=0.5.0,<0.6"`,
+   AgentJury explicitly: `uv pip install --reinstall-package agentjury --python <hermes-python> "agentjury[all]>=0.5.1,<0.6"`,
    or `<hermes-python> -m pip install --force-reinstall --no-deps --index-url https://pypi.org/simple "agentjury==0.5.1"`
    followed by the install command above for SDK/dependency requirements.
    Verify version `0.5.1`, schema `0.7`, import location and provenance using the

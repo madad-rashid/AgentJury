@@ -107,8 +107,9 @@ edit to a reviewed file.
 ## Limits
 
 - `verified` means this panel approved the supplied diff. Reviewers cannot run
-  your code, and no benchmark yet measures reviewer accuracy on code. The
-  confidence index is a heuristic, not a probability.
+  your code, and the only benchmark for these roles is the small synthetic
+  `agentjury benchmark --pack code`, which is not evidence of accuracy on real
+  changes. The confidence index is a heuristic, not a probability.
 - The send guard matches command text. It prevents accidental or unrequested
   sends by Claude; it is not a barrier against deliberate evasion. It also
   blocks harmless commands that contain the text `agentjury change send `, such
