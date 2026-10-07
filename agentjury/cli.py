@@ -33,7 +33,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from dotenv import load_dotenv
+from dotenv import find_dotenv, load_dotenv
 
 from .judges import ROLES, load_roles
 from . import __version__, SCHEMA_VERSION
@@ -451,7 +451,9 @@ def cmd_benchmark_audit(args: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(errors="backslashreplace")
-    load_dotenv()
+    # Search from the working directory upward, so an installed package finds the
+    # project's .env; the default searches from this file, which only works in a checkout.
+    load_dotenv(find_dotenv(usecwd=True))
     parser = argparse.ArgumentParser(prog="agentjury", description="Peer review for AI agent output.")
     parser.add_argument("--version", action="version",
                         version=f"agentjury {__version__} (schema {SCHEMA_VERSION})")
