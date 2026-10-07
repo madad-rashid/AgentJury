@@ -74,7 +74,7 @@ def test_invalid_dataset_stops_before_calls(fake_panels, tmp_path, capsys):
 
 def test_benchmark_explains_missing_openrouter_key(tmp_path, monkeypatch, capsys):
     monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr("agentjury.cli.load_dotenv", lambda: False)
+    monkeypatch.setattr("agentjury.cli.load_dotenv", lambda *args, **kwargs: False)
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     assert main(["benchmark", "--panel", "accuracy:openrouter:vendor/model"]) == 5
     assert "Set OPENROUTER_API_KEY" in capsys.readouterr().err

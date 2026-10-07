@@ -132,3 +132,17 @@ def test_print_verdict_golden_output(capsys):
     "        - Wording is vague.\n"
     "!  executive/openai: RuntimeError: boom\n"
 )
+
+
+def test_main_loads_the_working_directorys_env_file(tmp_path, monkeypatch, capsys):
+    import os
+    from agentjury.cli import main
+    (tmp_path / ".env").write_text("AGENTJURY_TEST_ENV_MARK=from-dotenv\n", encoding="utf-8")
+    nested = tmp_path / "src" / "pkg"
+    nested.mkdir(parents=True)
+    monkeypatch.chdir(nested)
+    monkeypatch.delenv("AGENTJURY_TEST_ENV_MARK", raising=False)
+    assert main(["roles"]) == 0
+    assert os.environ.get("AGENTJURY_TEST_ENV_MARK") == "from-dotenv"
+    monkeypatch.delenv("AGENTJURY_TEST_ENV_MARK", raising=False)
+
